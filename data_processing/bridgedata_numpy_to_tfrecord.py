@@ -116,6 +116,9 @@ def process(path):
                             np.zeros(len(traj["actions"]), dtype=np.bool_)
                         ),
                         "truncates": tensor_feature(truncates),
+                        "image_flows": tensor_feature(
+                            np.array(traj["image_flows"], dtype=np.float32)
+                        ),
                     }
                 )
             )

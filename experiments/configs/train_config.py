@@ -8,8 +8,8 @@ def get_config(config_string):
         log_interval=100,
         eval_interval=5000,
         save_interval=5000,
-        save_dir="path/to/save/dir",
-        data_path="path/to/data",
+        save_dir="/iliad/u/lhlin/bridge_data_v2/experiment_logs",
+        data_path="/iliad/u/lhlin/bridge_data_v2/datasets_tfrecord_flow",
         resume_path=None,
         seed=42,
     )
@@ -208,6 +208,63 @@ def get_config(config_string):
                 encoder="resnetv1-34-bridge",
                 encoder_kwargs=dict(
                     pooling_method="avg", add_spatial_coordinates=False, act="swish"
+                ),
+                **base_real_config,
+            )
+        ),
+        "bc": ConfigDict(
+            dict(
+                agent="bc",
+                agent_kwargs=dict(
+                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
+                    policy_kwargs=dict(
+                        tanh_squash_distribution=False,
+                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
+                        state_dependent_std=False,
+                    ),
+                    use_proprio=False,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    **base_data_config,
+                ),
+                encoder="resnetv1-34-bridge",
+                encoder_kwargs=dict(
+                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
+                ),
+                **base_real_config,
+            )
+        ),
+        "flow_bc": ConfigDict(
+            dict(
+                agent="flow_bc",
+                agent_kwargs=dict(
+                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
+                    policy_kwargs=dict(
+                        tanh_squash_distribution=False,
+                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
+                        state_dependent_std=False,
+                    ),
+                    use_proprio=False,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                    recon_loss_lambda=0.01,
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    **base_data_config,
+                ),
+                encoder="resnetv1-34-bridge",
+                encoder_kwargs=dict(
+                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
                 ),
                 **base_real_config,
             )

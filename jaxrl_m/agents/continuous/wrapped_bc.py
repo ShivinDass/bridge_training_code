@@ -12,19 +12,21 @@ from flax.core import FrozenDict
 from jaxrl_m.common.typing import Batch
 from jaxrl_m.common.typing import PRNGKey
 from jaxrl_m.common.common import JaxRLTrainState, ModuleDict, nonpytree_field
-from jaxrl_m.networks.actor_critic_nets import Policy
+from jaxrl_m.networks.actor_critic_nets import WrappedPolicy
 from jaxrl_m.networks.mlp import MLP
+from jaxrl_m.vision.resnet_dec import resnetdec_configs
 
 
-class BCAgent(flax.struct.PyTreeNode):
+class WrappedBCAgent(flax.struct.PyTreeNode):
     state: JaxRLTrainState
     lr_schedule: Any = nonpytree_field()
+    recon_loss_lambda: float
 
     @partial(jax.jit, static_argnames="pmap_axis")
     def update(self, batch: Batch, pmap_axis: str = None):
         def loss_fn(params, rng):
             rng, key = jax.random.split(rng)
-            dist = self.state.apply_fn(
+            embs, dist = self.state.apply_fn(
                 {"params": params},
                 batch["observations"],
                 temperature=1.0,
@@ -38,8 +40,15 @@ class BCAgent(flax.struct.PyTreeNode):
             actor_loss = -(log_probs).mean()
             actor_std = dist.stddev().mean(axis=1)
 
+            decoder_outputs = self.state.apply_fn(
+                {"params": params},
+                embs,
+                name="decoder",
+            )
+            recon_loss = ((decoder_outputs - batch["image_flows"]) ** 2).mean()
+
             return (
-                actor_loss,
+                actor_loss + self.recon_loss_lambda * recon_loss,
                 {
                     "actor_loss": actor_loss,
                     "mse": mse.mean(),
@@ -47,6 +56,7 @@ class BCAgent(flax.struct.PyTreeNode):
                     "pi_actions": pi_actions,
                     "mean_std": actor_std.mean(),
                     "max_std": actor_std.max(),
+                    "recon_loss": recon_loss,
                 },
             )
 
@@ -69,7 +79,7 @@ class BCAgent(flax.struct.PyTreeNode):
         temperature: float = 1.0,
         argmax=False
     ) -> jnp.ndarray:
-        dist = self.state.apply_fn(
+        _, dist = self.state.apply_fn(
             {"params": self.state.params},
             observations,
             temperature=temperature,
@@ -83,7 +93,7 @@ class BCAgent(flax.struct.PyTreeNode):
 
     @jax.jit
     def get_debug_metrics(self, batch, **kwargs):
-        dist = self.state.apply_fn(
+        embs, dist = self.state.apply_fn(
             {"params": self.state.params},
             batch["observations"],
             temperature=1.0,
@@ -92,8 +102,14 @@ class BCAgent(flax.struct.PyTreeNode):
         pi_actions = dist.mode()
         log_probs = dist.log_prob(batch["actions"])
         mse = ((pi_actions - batch["actions"]) ** 2).sum(-1)
+        decoder_outputs = self.state.apply_fn(
+            {"params": self.state.params},
+            embs,
+            name="decoder",
+        )
+        recon_loss = ((decoder_outputs - batch["image_flows"]) ** 2).mean()        
 
-        return {"mse": mse, "log_probs": log_probs, "pi_actions": pi_actions}
+        return {"mse": mse, "log_probs": log_probs, "pi_actions": pi_actions, "recon_loss": recon_loss}
 
     @classmethod
     def create(
@@ -114,19 +130,24 @@ class BCAgent(flax.struct.PyTreeNode):
         learning_rate: float = 3e-4,
         warmup_steps: int = 1000,
         decay_steps: int = 1000000,
+        # Aux loss
+        recon_loss_lambda: float = 0.01,
     ):
         encoder_def = EncodingWrapper(
             encoder=encoder_def, use_proprio=use_proprio, stop_gradient=False
         )
 
+        decoder_def = resnetdec_configs["resnet-18-dec"](num_output_channels=2, output_hw=128) 
+
         network_kwargs["activate_final"] = True
         networks = {
-            "actor": Policy(
+            "actor": WrappedPolicy(
                 encoder_def,
                 MLP(**network_kwargs),
                 action_dim=actions.shape[-1],
                 **policy_kwargs
-            )
+            ),
+            "decoder": decoder_def,
         }
 
         model_def = ModuleDict(networks)
@@ -141,7 +162,8 @@ class BCAgent(flax.struct.PyTreeNode):
         tx = optax.adam(lr_schedule)
 
         rng, init_rng = jax.random.split(rng)
-        params = model_def.init(init_rng, actor=[observations])["params"]
+        # NOTE: use a fixed emb size 512 for now
+        params = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])["params"]
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(
@@ -152,4 +174,4 @@ class BCAgent(flax.struct.PyTreeNode):
             rng=create_rng,
         )
 
-        return cls(state, lr_schedule)
+        return cls(state, lr_schedule, recon_loss_lambda)

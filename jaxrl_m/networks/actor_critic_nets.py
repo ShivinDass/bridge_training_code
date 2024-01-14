@@ -150,6 +150,51 @@ class Policy(nn.Module):
         return distribution
 
 
+class WrappedPolicy(nn.Module):
+    encoder: nn.Module
+    network: nn.Module
+    action_dim: int
+    init_final: Optional[float] = None
+    log_std_min: Optional[float] = -20
+    log_std_max: Optional[float] = 2
+    tanh_squash_distribution: bool = False
+    fixed_std: Optional[jnp.ndarray] = None
+    state_dependent_std: bool = True
+
+    @nn.compact
+    def __call__(
+        self, observations: jnp.ndarray, temperature: float = 1.0, train: bool = False
+    ):
+        embs = self.encoder(observations)
+        outputs = self.network(embs, train=train)
+
+        means = nn.Dense(self.action_dim, kernel_init=default_init())(outputs)
+        if self.fixed_std is None:
+            if self.state_dependent_std:
+                log_stds = nn.Dense(self.action_dim, kernel_init=default_init())(
+                    outputs
+                )
+            else:
+                log_stds = self.param(
+                    "log_stds", nn.initializers.zeros, (self.action_dim,)
+                )
+        else:
+            log_stds = jnp.log(jnp.array(self.fixed_std))
+
+        log_stds = jnp.clip(log_stds, self.log_std_min, self.log_std_max) / temperature
+
+        if self.tanh_squash_distribution:
+            distribution = TanhMultivariateNormalDiag(
+                loc=means, scale_diag=jnp.exp(log_stds)
+            )
+        else:
+            distribution = distrax.MultivariateNormalDiag(
+                loc=means, scale_diag=jnp.exp(log_stds)
+            )
+
+        return (embs, distribution)
+
+
 class TanhMultivariateNormalDiag(distrax.Transformed):
     def __init__(
         self,

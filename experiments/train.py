@@ -137,14 +137,23 @@ def main(_):
     # initialize agent
     rng = jax.random.PRNGKey(FLAGS.config.seed)
     rng, construct_rng = jax.random.split(rng)
-    agent = agents[FLAGS.config.agent].create(
-        rng=construct_rng,
-        observations=example_batch["observations"],
-        goals=example_batch["goals"],
-        actions=example_batch["actions"],
-        encoder_def=encoder_def,
-        **FLAGS.config.agent_kwargs,
-    )
+    if FLAGS.config.agent in ["bc", "flow_bc"]:
+        agent = agents[FLAGS.config.agent].create(
+            rng=construct_rng,
+            observations=example_batch["observations"],
+            actions=example_batch["actions"],
+            encoder_def=encoder_def,
+            **FLAGS.config.agent_kwargs,
+        )
+    else:
+        agent = agents[FLAGS.config.agent].create(
+            rng=construct_rng,
+            observations=example_batch["observations"],
+            goals=example_batch["goals"],
+            actions=example_batch["actions"],
+            encoder_def=encoder_def,
+            **FLAGS.config.agent_kwargs,
+        )
     if FLAGS.config.resume_path is not None:
         agent = checkpoints.restore_checkpoint(FLAGS.config.resume_path, target=agent)
     # replicate agent across devices
@@ -152,7 +161,8 @@ def main(_):
     agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
 
     timer = Timer()
-    for i in tqdm.tqdm(range(int(FLAGS.config.num_steps))):
+    # for i in tqdm.tqdm(range(int(FLAGS.config.num_steps))):
+    for i in range(int(FLAGS.config.num_steps)):
         timer.tick("total")
 
         timer.tick("dataset")
@@ -171,6 +181,8 @@ def main(_):
             for batch in val_data_iter:
                 rng, val_rng = jax.random.split(rng)
                 metrics.append(agent.get_debug_metrics(batch, seed=val_rng))
+            if len(metrics) > 1:
+                metrics = metrics[:-1] # drop remainder
             metrics = jax.tree_map(lambda *xs: np.mean(xs), *metrics)
             wandb_logger.log({"validation": metrics}, step=i)
             timer.tock("val")

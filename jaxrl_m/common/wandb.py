@@ -39,7 +39,7 @@ class WandBLogger(object):
         if self.config.unique_identifier == "":
             self.config.unique_identifier = datetime.datetime.now().strftime(
                 "%Y%m%d_%H%M%S"
-            )
+            ) + f"_{variant['seed']}"
 
         self.config.experiment_id = (
             self.experiment_id

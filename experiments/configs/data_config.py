@@ -51,6 +51,30 @@ def get_config(config_string):
                 "sample_weights": None,
                 "action_proprio_metadata": ACTION_PROPRIO_METADATA,
             }
-        )
+        ),
+        "viper_x": ml_collections.ConfigDict(
+            {
+                "include": [
+                    [
+                        "robonetv2/?*",
+                    ]
+                ],
+                "exclude": [],
+                "sample_weights": None,
+                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            }
+        ),
+        "viper_x+bridgedata_v2": ml_collections.ConfigDict(
+            {
+                "include": [
+                    ["robonetv2/?*"],
+                    ["bridge_data_v2/?*/?*/?*"]
+                ],
+                "exclude": [],
+                # "sample_weights": None, # NOTE: can try to do balance batch
+                "sample_weights": [0.5, 0.5],
+                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            }
+        ),
     }
     return possible_structures[config_string]

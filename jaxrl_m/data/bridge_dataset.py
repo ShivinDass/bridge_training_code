@@ -13,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 from absl import logging
 
-from jaxrl_m.data.tf_augmentations import augment
+from jaxrl_m.data.tf_augmentations import augment, random_resized_crop
 from jaxrl_m.data.tf_goal_relabeling import GOAL_RELABELING_FUNCTIONS
 
 
@@ -209,12 +209,21 @@ class BridgeDataset:
             dataset = dataset.enumerate(start=seed)
             dataset = dataset.map(self._augment, num_parallel_calls=tf.data.AUTOTUNE)
 
-        dataset = dataset.batch(
-            batch_size,
-            num_parallel_calls=tf.data.AUTOTUNE,
-            drop_remainder=True,
-            deterministic=not train,
-        )
+        # NOTE: this is just a hack for viper_x data
+        if train:
+            dataset = dataset.batch(
+                batch_size,
+                num_parallel_calls=tf.data.AUTOTUNE,
+                drop_remainder=True,
+                deterministic=not train,
+            )
+        else:
+            dataset = dataset.batch(
+                batch_size,
+                num_parallel_calls=tf.data.AUTOTUNE,
+                drop_remainder=False,
+                deterministic=not train,
+            )
 
         self.tf_dataset = dataset
 
@@ -263,6 +272,7 @@ class BridgeDataset:
         "actions": tf.float32,
         "terminals": tf.bool,
         "truncates": tf.bool,
+        "image_flows": tf.float32,
     }
 
     def _decode_example(self, example_proto):
@@ -290,6 +300,7 @@ class BridgeDataset:
             "actions": parsed_tensors["actions"],
             "terminals": parsed_tensors["terminals"],
             "truncates": parsed_tensors["truncates"],
+            "image_flows": parsed_tensors["image_flows"],
         }
 
     def _process_actions(self, traj):
@@ -414,6 +425,15 @@ class BridgeDataset:
             image[key]["image"] = augment(
                 image[key]["image"], sub_seed, **self.augment_kwargs
             )
+        
+        # NOTE: use the same seed to make sure the augmentation is consistent to observations/image
+        if "random_resize_crop" in self.augment_kwargs["augment_order"]:
+            image["image_flows"] = random_resized_crop(
+                image["image_flows"],
+                **self.augment_kwargs["random_resized_crop"],
+                seed=sub_seeds[0],
+            )
+
         return image
 
     def iterator(self):
