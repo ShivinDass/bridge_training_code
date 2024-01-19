@@ -43,8 +43,8 @@ class BCAgent(flax.struct.PyTreeNode):
                 {
                     "actor_loss": actor_loss,
                     "mse": mse.mean(),
-                    "log_probs": log_probs,
-                    "pi_actions": pi_actions,
+                    "log_probs": log_probs.mean(),
+                    "pi_actions": pi_actions.mean(),
                     "mean_std": actor_std.mean(),
                     "max_std": actor_std.max(),
                 },
