@@ -4,7 +4,7 @@ from ml_collections import ConfigDict
 def get_config(config_string):
     base_real_config = dict(
         batch_size=256,
-        num_steps=int(1e5),
+        num_steps=int(5e5),
         log_interval=500,
         eval_interval=5000,
         save_interval=25000,
@@ -25,7 +25,6 @@ def get_config(config_string):
                 agent="optical_flow_vae",
                 agent_kwargs=dict(
                     latent_kwargs=dict(
-                        projection_size=128,
                         hidden_dims=[300, 400],
                         output_dim=128
                     ),
@@ -34,14 +33,18 @@ def get_config(config_string):
                         log_std_max=15,
                         kl_weight=1e-4,
                     ),
-                    learning_rate=1e-3,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(5e5),
                 ),
                 dataset_kwargs=dict(
                     **base_data_config,
                 ),
                 encoder="resnetv1-18",
                 encoder_kwargs=dict(
-                    pooling_method="none"
+                    pooling_method="proj",
+                    projection_size=128,
+                    normalized=False,
                 ),
                 decoder="resnet-18-dec",
                 decoder_kwargs=dict(

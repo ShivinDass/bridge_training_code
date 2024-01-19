@@ -10,7 +10,6 @@ class VAEEncoder(nn.Module):
     @nn.compact
     def __call__(self, observations: jnp.ndarray):
         x = self.encoder(observations)
-        x = einops.rearrange(x, "... h w c -> ... (h w c)")
         x = self.latent_encoder(x)
         return x
 

@@ -5,6 +5,8 @@ import jax.numpy as jnp
 import flax
 import flax.linen as nn
 import optax
+from absl import logging
+from clu import parameter_overview
 
 from flax.core import FrozenDict
 from jaxrl_m.common.typing import Batch
@@ -55,6 +57,7 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
                     "vae_loss": vae_loss,
                     "recon_loss": recon_loss,
                     "kl_loss": kl_loss,
+                    # "samples": samples,
                 }
             )
             
@@ -94,6 +97,30 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
         return {"vae_loss": vae_loss, "recon_loss": recon_loss, "kl_loss": kl_loss} 
 
     @jax.jit
+    def visualize_reconstruction(self, batch: Batch, seed: PRNGKey):
+        posterior_params = self.state.apply_fn(
+            {"params": self.state.params},
+            batch["image_flows"],
+            name="encoder",
+        )
+
+        means, log_stds = jnp.split(posterior_params, 2, axis=-1)
+        log_stds=jnp.clip(log_stds, self.log_std_min, self.log_std_max)
+        dist = distrax.MultivariateNormalDiag(
+            loc=means, scale_diag=jnp.exp(log_stds)
+        )
+
+        samples = dist.sample(seed=seed)
+
+        reconstructions = self.state.apply_fn(
+            {"params": self.state.params},
+            samples,
+            name="decoder",
+        )
+
+        return reconstructions
+
+    @jax.jit
     def compute_embeddings(self, batch: Batch):
         posterior_params = self.state.apply_fn(
             {"params": self.state.params},
@@ -112,7 +139,6 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
         encoder: nn.Module,
         decoder: nn.Module,
         latent_kwargs: dict = {
-            "projection_size": 128,
             "hidden_dims": [128, 300, 400],
             "output_dim": 128
         },
@@ -122,10 +148,12 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
             "kl_weight": 1e-4,
         },
         # Optimizer
-        learning_rate: float = 1e-3,
+        learning_rate: float = 3e-4,
+        warmup_steps: int = 1000,
+        decay_steps: int = 1000000,
     ):
         mlp_encoder_kwargs = {
-            "hidden_dims": [latent_kwargs["projection_size"]] + latent_kwargs["hidden_dims"] + [latent_kwargs["output_dim"] * 2],
+            "hidden_dims": latent_kwargs["hidden_dims"] + [latent_kwargs["output_dim"] * 2],
             "activations": nn.relu,
         }
         latent_encoder = MLP(**mlp_encoder_kwargs)
@@ -149,10 +177,20 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
 
         model_def = ModuleDict(networks)
 
-        tx = optax.adam(learning_rate)
+        lr_schedule = optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=learning_rate,
+            warmup_steps=warmup_steps,
+            decay_steps=decay_steps,
+            end_value=0.0,
+        )
+        tx = optax.adam(lr_schedule)
 
         rng, init_rng = jax.random.split(rng)
-        params = model_def.init(init_rng, encoder=[observations["image_flows"]], decoder=[jnp.zeros((1, latent_kwargs["output_dim"]))])["params"]
+        # params = model_def.init(init_rng, encoder=[observations["image_flows"]], decoder=[jnp.zeros((1, latent_kwargs["output_dim"]))])["params"]
+        variables = model_def.init(init_rng, encoder=[observations["image_flows"]], decoder=[jnp.zeros((1, latent_kwargs["output_dim"]))])
+        logging.info(parameter_overview.get_parameter_overview(variables))
+        params = variables["params"]
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(

@@ -199,11 +199,16 @@ class ResNetEncoder(nn.Module):
     use_multiplicative_cond: bool = False
     num_spatial_blocks: int = 8
     use_film: bool = False
+    projection_size: int = 128
+    normalized: bool = True
 
     @nn.compact
     def __call__(self, observations: jnp.ndarray, train: bool = True, cond_var=None):
         # put inputs in [-1, 1]
-        x = observations.astype(jnp.float32) / 127.5 - 1.0
+        if self.normalized:
+            x = observations.astype(jnp.float32) / 127.5 - 1.0
+        else:
+            x = observations.astype(jnp.float32)
 
         if self.add_spatial_coordinates:
             x = AddSpatialCoordinates(dtype=self.dtype)(x)
@@ -279,6 +284,9 @@ class ResNetEncoder(nn.Module):
             x = jnp.mean(x, axis=(-3, -2))
         elif self.pooling_method == "max":
             x = jnp.max(x, axis=(-3, -2))
+        elif self.pooling_method == "proj":
+            x = jnp.mean(x, axis=(-3, -2))
+            x = nn.Dense(self.projection_size)(x)
         elif self.pooling_method == "none":
             pass
         else:
