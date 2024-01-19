@@ -39,7 +39,7 @@ flags.DEFINE_multi_string(
 flags.DEFINE_integer("im_size", None, "Image size", required=True)
 flags.DEFINE_string("video_save_path", None, "Path to save video")
 flags.DEFINE_string("goal_image_path", None, "Path to a single goal image")
-flags.DEFINE_integer("num_timesteps", 120, "num timesteps")
+flags.DEFINE_integer("num_timesteps", 80, "num timesteps")
 flags.DEFINE_bool("blocking", False, "Use the blocking controller")
 flags.DEFINE_spaceseplist("goal_eep", [0.3, 0.0, 0.15], "Goal position")
 flags.DEFINE_spaceseplist("initial_eep", [0.3, 0.0, 0.15], "Initial position")
@@ -52,7 +52,7 @@ STEP_DURATION = 0.2
 NO_PITCH_ROLL = False
 NO_YAW = False
 STICKY_GRIPPER_NUM_STEPS = 1
-WORKSPACE_BOUNDS = np.array([[0.1, -0.15, -0.1, -1.57, 0], [0.45, 0.25, 0.25, 1.57, 0]])
+WORKSPACE_BOUNDS = np.array([[0.1, -0.16, 0.03, -1.57, 0], [0.45, 0.12, 0.095, 1.57, 0]])
 CAMERA_TOPICS = [IMTopic("/blue/image_raw")]
 FIXED_STD = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -95,14 +95,23 @@ def load_checkpoint(checkpoint_weights_path, checkpoint_config_path):
     # create agent from wandb config
     rng = jax.random.PRNGKey(0)
     rng, construct_rng = jax.random.split(rng)
-    agent = agents[config["agent"]].create(
-        rng=construct_rng,
-        observations=example_batch["observations"],
-        goals=example_batch["goals"],
-        actions=example_batch["actions"],
-        encoder_def=encoder_def,
-        **config["agent_kwargs"],
-    )
+    if config["agent"] in ["bc", "flow_bc"]:
+        agent = agents[config["agent"]].create(
+            rng=construct_rng,
+            observations=example_batch["observations"],
+            actions=example_batch["actions"],
+            encoder_def=encoder_def,
+            **config["agent_kwargs"],
+        )
+    else:
+        agent = agents[config["agent"]].create(
+            rng=construct_rng,
+            observations=example_batch["observations"],
+            goals=example_batch["goals"],
+            actions=example_batch["actions"],
+            encoder_def=encoder_def,
+            **config["agent_kwargs"],
+        )
 
     # load action metadata from wandb
     action_proprio_metadata = config["bridgedata_config"]["action_proprio_metadata"]
@@ -115,9 +124,14 @@ def load_checkpoint(checkpoint_weights_path, checkpoint_config_path):
     def get_action(obs, goal_obs):
         nonlocal rng
         rng, key = jax.random.split(rng)
-        action = jax.device_get(
-            agent.sample_actions(obs, goal_obs, seed=key, argmax=FLAGS.deterministic)
-        )
+        if config["agent"] in ["bc", "flow_bc"]:
+            action = jax.device_get(
+                agent.sample_actions(obs, seed=key, argmax=FLAGS.deterministic)
+            )
+        else:
+            action = jax.device_get(
+                agent.sample_actions(obs, goal_obs, seed=key, argmax=FLAGS.deterministic)
+            )
         action = action * action_std + action_mean
         return action
 
