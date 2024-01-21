@@ -52,7 +52,7 @@ STEP_DURATION = 0.2
 NO_PITCH_ROLL = False
 NO_YAW = False
 STICKY_GRIPPER_NUM_STEPS = 1
-WORKSPACE_BOUNDS = np.array([[0.1, -0.16, 0.03, -1.57, 0], [0.45, 0.12, 0.095, 1.57, 0]])
+WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.4, 0.25, 0.15, 1.57, 0]])
 CAMERA_TOPICS = [IMTopic("/blue/image_raw")]
 FIXED_STD = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
