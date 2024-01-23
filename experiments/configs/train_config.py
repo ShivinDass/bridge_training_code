@@ -4,7 +4,8 @@ from ml_collections import ConfigDict
 def get_config(config_string):
     base_real_config = dict(
         batch_size=256,
-        num_steps=int(2e6),
+        # num_steps=int(2e6),
+        num_steps=300000,
         log_interval=100,
         eval_interval=5000,
         save_interval=5000,

@@ -56,7 +56,19 @@ def get_config(config_string):
             {
                 "include": [
                     [
-                        "robonetv2/?*",
+                        "few-shot-IL/?*",
+                    ]
+                ],
+                "exclude": [],
+                "sample_weights": None,
+                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            }
+        ),
+        "viper_x-40": ml_collections.ConfigDict(
+            {
+                "include": [
+                    [
+                        "few-shot-IL-50/?*",
                     ]
                 ],
                 "exclude": [],
@@ -67,8 +79,7 @@ def get_config(config_string):
         "viper_x+bridgedata_v2": ml_collections.ConfigDict(
             {
                 "include": [
-                    ["robonetv2/?*"],
-                    ["bridge_data_v2/?*/?*/?*"]
+                    ["few-shot-IL/?*", "bridge_data_v2/?*/?*/?*"]
                 ],
                 "exclude": [],
                 "sample_weights": None,
@@ -78,8 +89,30 @@ def get_config(config_string):
         "viper_x+bridgedata_v2_balance": ml_collections.ConfigDict(
             {
                 "include": [
-                    ["robonetv2/?*"],
+                    ["few-shot-IL/?*"],
                     ["bridge_data_v2/?*/?*/?*"]
+                ],
+                "exclude": [],
+                "sample_weights": [0.5, 0.5],
+                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            }
+        ),
+        "viper_x-40+bridgedata_v2_balance": ml_collections.ConfigDict(
+            {
+                "include": [
+                    ["few-shot-IL-50/?*"],
+                    ["bridge_data_v2/?*/?*/?*"]
+                ],
+                "exclude": [],
+                "sample_weights": [0.5, 0.5],
+                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            }
+        ),
+        "viper_x+retrieved_0.1_balance": ml_collections.ConfigDict(
+            {
+                "include": [
+                    ["few-shot-IL/?*"],
+                    ["bridge_data_v2_0.1"]
                 ],
                 "exclude": [],
                 "sample_weights": [0.5, 0.5],

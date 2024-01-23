@@ -83,10 +83,15 @@ def main(_):
         [os.path.join(path, "train/out.tfrecord") for path in sub_list]
         for sub_list in task_paths
     ]
-    val_paths = [
+    possible_val_paths = [
         [os.path.join(path, "val/out.tfrecord") for path in sub_list]
         for sub_list in task_paths
     ]
+
+    val_paths = []
+    for val_path in possible_val_paths:
+        if os.path.exists(val_path[0]):
+            val_paths.append(val_path)
 
     train_data = BridgeDataset(
         train_paths,
