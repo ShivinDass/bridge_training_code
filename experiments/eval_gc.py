@@ -209,6 +209,12 @@ def main(_):
                 * 255
             ).astype(np.uint8)
 
+        try:
+            env.reset()
+            env.start()
+        except Exception as e:
+            continue
+
         # ask for which policy to use
         if len(policies) == 1:
             policy_idx = 0
@@ -221,11 +227,6 @@ def main(_):
 
         policy_name = list(policies.keys())[policy_idx]
         get_action, obs_horizon = policies[policy_name]
-        try:
-            env.reset()
-            env.start()
-        except Exception as e:
-            continue
 
         # move to initial position
         try:
