@@ -42,7 +42,7 @@ flags.DEFINE_string("goal_image_path", None, "Path to a single goal image")
 flags.DEFINE_integer("num_timesteps", 80, "num timesteps")
 flags.DEFINE_bool("blocking", False, "Use the blocking controller")
 flags.DEFINE_spaceseplist("goal_eep", [0.3, 0.0, 0.15], "Goal position")
-flags.DEFINE_spaceseplist("initial_eep", [0.3, 0.0, 0.15], "Initial position")
+flags.DEFINE_spaceseplist("initial_eep", [0.3, -0.02, 0.15], "Initial position")
 flags.DEFINE_integer("act_exec_horizon", 1, "Action sequence length")
 flags.DEFINE_bool("deterministic", True, "Whether to sample action deterministically")
 
