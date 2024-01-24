@@ -42,7 +42,7 @@ flags.DEFINE_string("goal_image_path", None, "Path to a single goal image")
 flags.DEFINE_integer("num_timesteps", 80, "num timesteps")
 flags.DEFINE_bool("blocking", False, "Use the blocking controller")
 flags.DEFINE_spaceseplist("goal_eep", [0.3, 0.0, 0.15], "Goal position")
-flags.DEFINE_spaceseplist("initial_eep", [0.3, -0.02, 0.15], "Initial position")
+flags.DEFINE_spaceseplist("initial_eep", [0.32, -0.03, 0.15], "Initial position")
 flags.DEFINE_integer("act_exec_horizon", 1, "Action sequence length")
 flags.DEFINE_bool("deterministic", True, "Whether to sample action deterministically")
 
@@ -52,7 +52,7 @@ STEP_DURATION = 0.2
 NO_PITCH_ROLL = False
 NO_YAW = False
 STICKY_GRIPPER_NUM_STEPS = 1
-WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.35, 0.25, 0.15, 1.57, 0]])
+WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.35, 0.25, 0.2, 1.57, 0]])
 CAMERA_TOPICS = [IMTopic("/blue/image_raw")]
 FIXED_STD = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -210,6 +210,7 @@ def main(_):
             ).astype(np.uint8)
 
         try:
+            env.move_to_neutral()
             env.reset()
             env.start()
         except Exception as e:
