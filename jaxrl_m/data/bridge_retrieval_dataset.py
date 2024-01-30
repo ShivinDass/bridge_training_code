@@ -35,12 +35,17 @@ class BridgeRetrievalDataset:
         seed: int,
         batch_size: int = 256,
         cache: bool = False,
+        load_language: bool = False,
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
         sample_weights = [1 / len(data_paths)] * len(data_paths)
 
         self.cache = cache
+        self.load_language = load_language
+
+        if self.load_language:
+            self.PROTO_TYPE_SPEC["language"] = tf.string
 
         # construct a dataset for each sub-list of paths
         datasets = []
@@ -54,6 +59,11 @@ class BridgeRetrievalDataset:
         dataset = tf.data.Dataset.sample_from_datasets(
             datasets, sample_weights, seed=seed
         )
+
+        if self.load_language:
+            dataset = dataset.filter(
+                lambda x: tf.math.reduce_any(x["goal_language"] != "")
+            )
 
         dataset = dataset.batch(
             batch_size,
@@ -83,6 +93,9 @@ class BridgeRetrievalDataset:
         # cache before add_goals because add_goals introduces randomness
         if self.cache:
             dataset = dataset.cache()
+
+        # yields trajectories
+        dataset = dataset.map(self._add_goals, num_parallel_calls=tf.data.AUTOTUNE)
 
         # unbatch to yield individual transitions
         dataset = dataset.unbatch()
@@ -122,11 +135,24 @@ class BridgeRetrievalDataset:
                 "image": parsed_tensors["next_observations/images0"],
                 "proprio": parsed_tensors["next_observations/state"],
             },
+            **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
             "terminals": parsed_tensors["terminals"],
             "truncates": parsed_tensors["truncates"],
             "image_flows": parsed_tensors["image_flows"],
         }
+
+    def _add_goals(self, traj):
+        if self.load_language:
+            lang_idx = tf.random.uniform(
+                shape=[], maxval=len(traj["language"]), dtype=tf.int32
+            )
+            lang = traj["language"][lang_idx]
+            traj["goal_language"] = tf.broadcast_to(
+                lang, tf.shape(traj["terminals"])
+            )
+            traj.pop("language")
+        return traj
 
     def iterator(self):
         return self.tf_dataset.prefetch(tf.data.AUTOTUNE).as_numpy_iterator()
