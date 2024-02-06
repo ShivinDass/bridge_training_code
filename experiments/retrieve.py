@@ -22,6 +22,7 @@ flags.DEFINE_string("target_dataset_path", None, "Path to the target dataset.", 
 flags.DEFINE_string("prior_dataset_path", None, "Path to the prior dataset.", required=True)
 flags.DEFINE_float("threshold", 0.1, "Threshold for retrieval.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
+flags.DEFINE_string("prefix", "", "Prefix for the output file.")
 
 config_flags.DEFINE_config_file(
     "config",
@@ -46,24 +47,15 @@ def main(_):
     prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path,  prefix=FLAGS.config.data_path)]
 
     target_paths = [[os.path.join(path, "train/out.tfrecord") for path in sub_list] for sub_list in target_paths]
-    prior_paths  = [[os.path.join(path, "train/out.tfrecord") for path in sub_list] for sub_list in prior_paths]
+    prior_paths  = [sorted([os.path.join(path, "train/out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
 
     target_data = BridgeRetrievalDataset(
         target_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
     )
-    prior_data = BridgeRetrievalDataset(
-        prior_paths,
-        FLAGS.config.seed,
-        batch_size=FLAGS.config.batch_size,
-    )
-
     target_data_iter = target_data.tf_dataset.as_numpy_iterator()
-    prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
-    
     target_batch = next(target_data_iter)
-    prior_batch  = next(prior_data_iter)
 
     # define encoder
     encoder_def = encoders[FLAGS.config.encoder](**FLAGS.config.encoder_kwargs)
@@ -83,6 +75,7 @@ def main(_):
     )
     agent = checkpoints.restore_checkpoint(FLAGS.checkpoint_path, target=agent)
 
+    # compute target embeddings
     target_embeddings = []
     while True:
         target_embeddings.append(agent.compute_embeddings(target_batch))
@@ -95,34 +88,51 @@ def main(_):
     logging.info(f"target size: {target_embeddings.shape[0]}")
     logging.info("Finish computing target embeddings.")
 
+    # compute prior embeddings
+    prior_data = BridgeRetrievalDataset(
+        prior_paths,
+        FLAGS.config.seed,
+        batch_size=FLAGS.config.batch_size,
+    )
+    prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
     sim_scores = []
     while True:
-        prior_embeddings = agent.compute_embeddings(prior_batch)
-        sim_scores.append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings, prior_embeddings), axis=0))
-
         try:
             prior_batch = next(prior_data_iter)
+            if len(sim_scores) == 0:
+                logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
+            prior_embeddings = agent.compute_embeddings(prior_batch)
+            sim_scores.append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings, prior_embeddings), axis=0))
         except StopIteration:
             break
     sim_scores = jnp.concatenate(sim_scores, axis=0)
     logging.info(f"prior size: {sim_scores.shape[0]}")
     logging.info("Finish computing similarity scores.")
 
+    # find retrieved data
     retrieval_distances = -sim_scores
     sorted_distances = np.argsort(retrieval_distances)
     threshold_idx = sorted_distances[:int(FLAGS.threshold * len(sorted_distances))]
     mask = np.zeros_like(retrieval_distances, dtype=np.bool_)
     mask[threshold_idx] = True
 
-    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}", 'train/out.tfrecord')
+    # store retrieved data
+    prior_data = BridgeRetrievalDataset(
+        prior_paths,
+        FLAGS.config.seed,
+        batch_size=FLAGS.config.batch_size,
+    )
+    prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
+    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}", 'train/out.tfrecord')
     tf.io.gfile.makedirs(os.path.dirname(outpath))
     with tf.io.TFRecordWriter(outpath) as writer:
-        prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
         current_idx, logger_step = 0, 0
 
         while True:
             try:
                 prior_batch = next(prior_data_iter)
+                if logger_step == 0:
+                    logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
                 current_mask = mask[current_idx:current_idx+len(prior_batch['terminals'])]
                 current_idx += len(prior_batch['terminals'])
                 logger_step += 1

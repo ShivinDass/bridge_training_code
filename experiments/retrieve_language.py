@@ -61,6 +61,8 @@ def main(_):
         while True:
             try:
                 prior_batch = next(prior_data_iter)
+                if logger_step == 0:
+                    logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
                 current_mask = [False] * len(prior_batch['terminals'])
                 for i in range(len(prior_batch['terminals'])):
                     for key_word in FLAGS.key_words:

@@ -22,6 +22,7 @@ flags.DEFINE_string("precomputed_sim_scores_path", None, "Path to precomputed si
 flags.DEFINE_float("threshold", 0.1, "Threshold for retrieval.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
 flags.DEFINE_string("postfix", "", "Postfix for the output path.")
+flags.DEFINE_string("prefix", "", "Prefix for the output file.")
 
 config_flags.DEFINE_config_file(
     "config",
@@ -57,7 +58,7 @@ def main(_):
     mask = np.zeros_like(retrieval_distances, dtype=np.bool_)
     mask[threshold_idx] = True
 
-    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.postfix}_{FLAGS.threshold}", 'train/out.tfrecord')
+    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.postfix}_{FLAGS.threshold}", 'train/out.tfrecord')
     tf.io.gfile.makedirs(os.path.dirname(outpath))
     with tf.io.TFRecordWriter(outpath) as writer:
         prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
