@@ -11,6 +11,7 @@ def get_config(config_string):
         save_interval=5000,
         save_dir="/iliad/u/lhlin/bridge_data_v2/experiment_logs",
         data_path="/iliad/u/lhlin/bridge_data_v2/datasets_tfrecord_flow",
+        # data_path="/tmp/bridgedata_v2/tf_flow", # for iliad 5, 6
         resume_path=None,
         seed=42,
     )
@@ -241,7 +242,7 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        "flow_bc": ConfigDict(
+        "flow_bc_pretrained-freezed-BN": ConfigDict(
             dict(
                 agent="flow_bc",
                 agent_kwargs=dict(
@@ -263,10 +264,12 @@ def get_config(config_string):
                     relabel_actions=True,
                     **base_data_config,
                 ),
-                encoder="resnetv1-34-bridge",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                ),
+                # encoder="resnetv1-34-bridge",
+                # encoder_kwargs=dict(
+                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
+                # ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(),
                 **base_real_config,
             )
         ),

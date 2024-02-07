@@ -108,6 +108,7 @@ class JaxRLTrainState(struct.PyTreeNode):
     apply_fn: Callable = struct.field(pytree_node=False)
     params: Params
     target_params: Params
+    batch_stats: Params
     txs: Any = struct.field(pytree_node=False)
     opt_states: Any
     rng: PRNGKey
@@ -200,7 +201,7 @@ class JaxRLTrainState(struct.PyTreeNode):
 
         # compute gradients
         grads_and_aux = jax.tree_map(
-            lambda loss_fn, rng: jax.grad(loss_fn, has_aux=has_aux)(self.params, rng),
+            lambda loss_fn, rng: jax.grad(loss_fn, has_aux=has_aux)(self.params, self.batch_stats, rng),
             loss_fns,
             rngs,
         )
@@ -221,7 +222,7 @@ class JaxRLTrainState(struct.PyTreeNode):
 
     @classmethod
     def create(
-        cls, *, apply_fn, params, txs, target_params=None, rng=jax.random.PRNGKey(0)
+        cls, *, apply_fn, params, txs, target_params=None, batch_stats=None, rng=jax.random.PRNGKey(0)
     ):
         """
         Initializes a new train state.
@@ -238,6 +239,7 @@ class JaxRLTrainState(struct.PyTreeNode):
             apply_fn=apply_fn,
             params=params,
             target_params=target_params,
+            batch_stats=batch_stats,
             txs=txs,
             opt_states=cls._tx_tree_map(lambda tx: tx.init(params), txs),
             rng=rng,

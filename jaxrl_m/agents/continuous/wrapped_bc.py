@@ -24,10 +24,10 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
 
     @partial(jax.jit, static_argnames="pmap_axis")
     def update(self, batch: Batch, pmap_axis: str = None):
-        def loss_fn(params, rng):
+        def loss_fn(params, batch_stats, rng):
             rng, key = jax.random.split(rng)
             embs, dist = self.state.apply_fn(
-                {"params": params},
+                {"params": params, "batch_stats": batch_stats},
                 batch["observations"],
                 temperature=1.0,
                 train=True,
@@ -80,7 +80,7 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
         argmax=False
     ) -> jnp.ndarray:
         _, dist = self.state.apply_fn(
-            {"params": self.state.params},
+            {"params": self.state.params, "batch_stats": self.state.batch_stats},
             observations,
             temperature=temperature,
             name="actor",
@@ -92,9 +92,25 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
         return actions
 
     @jax.jit
+    def get_predicted_flow(self, observations):
+        embs, _ = self.state.apply_fn(
+            {"params": self.state.params, "batch_stats": self.state.batch_stats},
+            observations,
+            temperature=1.0,
+            name="actor",
+        )
+
+        decoder_outputs = self.state.apply_fn(
+            {"params": self.state.params},
+            embs,
+            name="decoder",
+        )
+        return decoder_outputs
+
+    @jax.jit
     def get_debug_metrics(self, batch, **kwargs):
         embs, dist = self.state.apply_fn(
-            {"params": self.state.params},
+            {"params": self.state.params, "batch_stats": self.state.batch_stats},
             batch["observations"],
             temperature=1.0,
             name="actor",
@@ -163,7 +179,10 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
 
         rng, init_rng = jax.random.split(rng)
         # NOTE: use a fixed emb size 512 for now
-        params = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])["params"]
+        # params = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])["params"]
+        params_and_batch_stats = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])
+        params = params_and_batch_stats["params"]
+        batch_stats = params_and_batch_stats["batch_stats"]
 
         rng, create_rng = jax.random.split(rng)
         state = JaxRLTrainState.create(
@@ -171,6 +190,7 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
             params=params,
             txs=tx,
             target_params=params,
+            batch_stats=batch_stats,
             rng=create_rng,
         )
 
