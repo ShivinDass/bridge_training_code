@@ -113,8 +113,8 @@ class BasicBlock(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn1'],
@@ -129,8 +129,8 @@ class BasicBlock(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn2'],
@@ -144,8 +144,8 @@ class BasicBlock(nn.Module):
                                use_bias=False,
                                dtype=self.dtype)(residual)
 
-            residual = ops.freezed_batch_norm(residual,
-                                    #   train=train,
+            residual = ops.batch_norm(residual,
+                                      train=train,
                                       epsilon=1e-05,
                                       momentum=0.1,
                                       params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
@@ -207,8 +207,8 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn1'],
@@ -223,8 +223,8 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
         
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn2'],
@@ -238,8 +238,8 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn3'],
@@ -253,8 +253,8 @@ class Bottleneck(nn.Module):
                                use_bias=False,
                                dtype=self.dtype)(residual)
 
-            residual = ops.freezed_batch_norm(residual,
-                                    #   train=train,
+            residual = ops.batch_norm(residual,
+                                      train=train,
                                       epsilon=1e-05,
                                       momentum=0.1,
                                       params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
@@ -341,9 +341,15 @@ class ResNet(nn.Module):
         """
 
         x = x.astype(jnp.float32)
-        N, H, W, C = x.shape
-        if H != 256:
-            x = jax.image.resize(x, (N, 256, 256, C), method='bilinear', antialias=False)
+        if len(x.shape) == 4:
+            N, H, W, C = x.shape
+            if H != 256:
+                x = jax.image.resize(x, (N, 256, 256, C), method='bilinear', antialias=False)
+        elif len(x.shape) == 3:
+            H, W, C = x.shape
+            if H != 256:
+                x = jax.image.resize(x, (256, 256, C), method='bilinear', antialias=False)
+
 
         if self.normalize:
             x = x / 255.0
@@ -370,8 +376,8 @@ class ResNet(nn.Module):
                     dtype=self.dtype)(x)
         act['conv1'] = x
 
-        x = ops.freezed_batch_norm(x,
-                        #    train=train,
+        x = ops.batch_norm(x,
+                           train=train,
                            epsilon=1e-05,
                            momentum=0.1,
                            params=None if self.param_dict is None else self.param_dict['bn1'],
@@ -422,7 +428,7 @@ class ResNet(nn.Module):
                            dtype=self.dtype)(x, act, train)
 
         # Classifier
-        x = jnp.mean(x, axis=(1, 2))
+        x = jnp.mean(x, axis=(-3, -2))
         if self.output == 'embs':
             return x
         
@@ -717,15 +723,16 @@ def ResNet152(output='softmax',
                   dtype=dtype)
 
 
+# NOTE: this ckpt_dir is just to accomodate docker
 pretrained_resnet_configs = {
     "pretrained_resnet18": functools.partial(
         ResNet18,
         output='embs',
-        ckpt_dir='/iliad/u/lhlin/bridge_data_v2/pretrained_resnet'
+        ckpt_dir='./pretrained_resnet'
     ),
     "pretrained_resnet34": functools.partial(
         ResNet34,
         output='embs',
-        ckpt_dir='/iliad/u/lhlin/bridge_data_v2/pretrained_resnet'
+        ckpt_dir='./pretrained_resnet'
     ),
 }
