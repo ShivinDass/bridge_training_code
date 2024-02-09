@@ -216,7 +216,11 @@ class JaxRLTrainState(struct.PyTreeNode):
         if has_aux:
             grads = jax.tree_map(lambda _, x: x[0], loss_fns, grads_and_aux)
             aux = jax.tree_map(lambda _, x: x[1], loss_fns, grads_and_aux)
-            return self.apply_gradients(grads=grads), aux
+            new_state = self.apply_gradients(grads=grads)
+            if 'batch_stats' in aux:
+                new_state = new_state.replace(batch_stats=aux['batch_stats'])
+                aux.pop('batch_stats')
+            return new_state, aux
         else:
             return self.apply_gradients(grads=grads_and_aux)
 

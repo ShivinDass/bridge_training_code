@@ -165,7 +165,7 @@ class WrappedPolicy(nn.Module):
     def __call__(
         self, observations: jnp.ndarray, temperature: float = 1.0, train: bool = False
     ):
-        embs = self.encoder(observations)
+        embs = self.encoder(observations, train=train)
         outputs = self.network(embs, train=train)
 
         means = nn.Dense(self.action_dim, kernel_init=default_init())(outputs)

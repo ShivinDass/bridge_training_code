@@ -273,6 +273,38 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
+        # NOTE: Just for naming
+        "flow_bc_pretrained": ConfigDict(
+            dict(
+                agent="flow_bc",
+                agent_kwargs=dict(
+                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
+                    policy_kwargs=dict(
+                        tanh_squash_distribution=False,
+                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
+                        state_dependent_std=False,
+                    ),
+                    use_proprio=False,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                    recon_loss_lambda=0.01,
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    **base_data_config,
+                ),
+                # encoder="resnetv1-34-bridge",
+                # encoder_kwargs=dict(
+                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
+                # ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(),
+                **base_real_config,
+            )
+        ),
     }
 
     return possible_structures[config_string]

@@ -21,8 +21,8 @@ class EncodingWrapper(nn.Module):
     use_proprio: bool
     stop_gradient: bool
 
-    def __call__(self, observations: Dict[str, jnp.ndarray]) -> jnp.ndarray:
-        encoding = self.encoder(observations["image"])
+    def __call__(self, observations: Dict[str, jnp.ndarray], train: bool = False) -> jnp.ndarray:
+        encoding = self.encoder(observations["image"], train=train)
         if self.use_proprio:
             encoding = jnp.concatenate([encoding, observations["proprio"]], axis=-1)
         if self.stop_gradient:
