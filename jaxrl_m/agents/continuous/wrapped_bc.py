@@ -11,14 +11,14 @@ import optax
 from flax.core import FrozenDict
 from jaxrl_m.common.typing import Batch
 from jaxrl_m.common.typing import PRNGKey
-from jaxrl_m.common.common import JaxRLTrainState, ModuleDict, nonpytree_field
+from jaxrl_m.common.common import JaxRLTrainStateWithBatchStats, ModuleDict, nonpytree_field
 from jaxrl_m.networks.actor_critic_nets import WrappedPolicy
 from jaxrl_m.networks.mlp import MLP
 from jaxrl_m.vision.resnet_dec import resnetdec_configs
 
 
 class WrappedBCAgent(flax.struct.PyTreeNode):
-    state: JaxRLTrainState
+    state: JaxRLTrainStateWithBatchStats
     lr_schedule: Any = nonpytree_field()
     recon_loss_lambda: float
 
@@ -26,9 +26,10 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
     def update(self, batch: Batch, pmap_axis: str = None):
         def loss_fn(params, batch_stats, rng):
             rng, key = jax.random.split(rng)
-            embs, dist = self.state.apply_fn(
+            (embs, dist), variables = self.state.apply_fn(
                 {"params": params, "batch_stats": batch_stats},
                 batch["observations"],
+                mutable=["batch_stats"],
                 temperature=1.0,
                 train=True,
                 rngs={"dropout": key},
@@ -57,6 +58,7 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
                     "mean_std": actor_std.mean(),
                     "max_std": actor_std.max(),
                     "recon_loss": recon_loss,
+                    "batch_stats": variables['batch_stats'],
                 },
             )
 
@@ -185,7 +187,7 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
         batch_stats = params_and_batch_stats["batch_stats"]
 
         rng, create_rng = jax.random.split(rng)
-        state = JaxRLTrainState.create(
+        state = JaxRLTrainStateWithBatchStats.create(
             apply_fn=model_def.apply,
             params=params,
             txs=tx,
