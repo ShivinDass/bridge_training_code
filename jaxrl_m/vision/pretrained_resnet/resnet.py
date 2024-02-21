@@ -88,6 +88,7 @@ class BasicBlock(nn.Module):
     bias_init: functools.partial=nn.initializers.zeros
     block_name: str=None
     dtype: str='float32'
+    freezed_BN: bool=False
 
     @nn.compact
     def __call__(self, x, act, train=True):
@@ -102,6 +103,10 @@ class BasicBlock(nn.Module):
         Returns:
             (tensor): Output shape of shape [N, H', W', features].
         """
+        if self.freezed_BN:
+            bn = ops.freezed_batch_norm
+        else:
+            bn = ops.batch_norm
 
         residual = x 
 
@@ -113,12 +118,12 @@ class BasicBlock(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn1'],
-                           dtype=self.dtype) 
+        x = bn(x,
+               train=train,
+               epsilon=1e-05,
+               momentum=0.1,
+               params=None if self.param_dict is None else self.param_dict['bn1'],
+               dtype=self.dtype) 
         x = nn.relu(x)
 
         x = nn.Conv(features=self.features, 
@@ -129,12 +134,12 @@ class BasicBlock(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn2'],
-                           dtype=self.dtype) 
+        x = bn(x,
+               train=train,
+               epsilon=1e-05,
+               momentum=0.1,
+               params=None if self.param_dict is None else self.param_dict['bn2'],
+               dtype=self.dtype) 
 
         if self.downsample:
             residual = nn.Conv(features=self.features, 
@@ -144,12 +149,12 @@ class BasicBlock(nn.Module):
                                use_bias=False,
                                dtype=self.dtype)(residual)
 
-            residual = ops.batch_norm(residual,
-                                      train=train,
-                                      epsilon=1e-05,
-                                      momentum=0.1,
-                                      params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
-                                      dtype=self.dtype) 
+            residual = bn(residual,
+                          train=train,
+                          epsilon=1e-05,
+                          momentum=0.1,
+                          params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
+                          dtype=self.dtype) 
         
         x += residual
         x = nn.relu(x)
@@ -184,6 +189,7 @@ class Bottleneck(nn.Module):
     block_name: str=None
     expansion: int=4
     dtype: str='float32'
+    freezed_BN: bool=False
 
     @nn.compact
     def __call__(self, x, act, train=True):
@@ -198,6 +204,11 @@ class Bottleneck(nn.Module):
         Returns:
             (tensor): Output shape of shape [N, H', W', features].
         """
+        if self.freezed_BN:
+            bn = ops.freezed_batch_norm
+        else:
+            bn = ops.batch_norm
+
         residual = x 
         
         x = nn.Conv(features=self.features, 
@@ -207,12 +218,12 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn1'],
-                           dtype=self.dtype) 
+        x = bn(x,
+               train=train,
+               epsilon=1e-05,
+               momentum=0.1,
+               params=None if self.param_dict is None else self.param_dict['bn1'],
+               dtype=self.dtype) 
         x = nn.relu(x)
 
         x = nn.Conv(features=self.features, 
@@ -223,12 +234,12 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
         
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn2'],
-                           dtype=self.dtype) 
+        x = bn(x,
+               train=train,
+               epsilon=1e-05,
+               momentum=0.1,
+               params=None if self.param_dict is None else self.param_dict['bn2'],
+               dtype=self.dtype) 
         x = nn.relu(x)
 
         x = nn.Conv(features=self.features * self.expansion, 
@@ -238,12 +249,12 @@ class Bottleneck(nn.Module):
                     use_bias=False,
                     dtype=self.dtype)(x)
 
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn3'],
-                           dtype=self.dtype) 
+        x = bn(x,
+               train=train,
+               epsilon=1e-05,
+               momentum=0.1,
+               params=None if self.param_dict is None else self.param_dict['bn3'],
+               dtype=self.dtype) 
 
         if self.downsample:
             residual = nn.Conv(features=self.features * self.expansion, 
@@ -253,12 +264,12 @@ class Bottleneck(nn.Module):
                                use_bias=False,
                                dtype=self.dtype)(residual)
 
-            residual = ops.batch_norm(residual,
-                                      train=train,
-                                      epsilon=1e-05,
-                                      momentum=0.1,
-                                      params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
-                                      dtype=self.dtype) 
+            residual = bn(residual,
+                          train=train,
+                          epsilon=1e-05,
+                          momentum=0.1,
+                          params=None if self.param_dict is None else self.param_dict['downsample']['bn'],
+                          dtype=self.dtype) 
         
         x += residual
         x = nn.relu(x)
@@ -316,6 +327,7 @@ class ResNet(nn.Module):
     bias_init: functools.partial=nn.initializers.zeros
     ckpt_dir: str=None
     dtype: str='float32'
+    freezed_BN: bool=False
 
     def setup(self):
 
@@ -376,12 +388,19 @@ class ResNet(nn.Module):
                     dtype=self.dtype)(x)
         act['conv1'] = x
 
-        x = ops.batch_norm(x,
-                           train=train,
-                           epsilon=1e-05,
-                           momentum=0.1,
-                           params=None if self.param_dict is None else self.param_dict['bn1'],
-                           dtype=self.dtype)
+        if self.freezed_BN:
+            x = ops.freezed_batch_norm(x,
+                                       epsilon=1e-05,
+                                       momentum=0.1,
+                                       params=None if self.param_dict is None else self.param_dict['bn1'],
+                                       dtype=self.dtype)
+        else:
+            x = ops.batch_norm(x,
+                               train=train,
+                               epsilon=1e-05,
+                               momentum=0.1,
+                               params=None if self.param_dict is None else self.param_dict['bn1'],
+                               dtype=self.dtype)
         x = nn.relu(x)
         x = nn.max_pool(x, window_shape=(3, 3), strides=(2, 2), padding=((1, 1), (1, 1)))
 
@@ -395,7 +414,8 @@ class ResNet(nn.Module):
                            stride=i != 0,
                            param_dict=params,
                            block_name=f'block1_{i}',
-                           dtype=self.dtype)(x, act, train)
+                           dtype=self.dtype,
+                           freezed_BN=self.freezed_BN)(x, act, train)
         
         # Layer 2
         for i in range(LAYERS[self.architecture][1]):
@@ -405,7 +425,8 @@ class ResNet(nn.Module):
                            downsample=i == 0,
                            param_dict=params,
                            block_name=f'block2_{i}',
-                           dtype=self.dtype)(x, act, train)
+                           dtype=self.dtype,
+                           freezed_BN=self.freezed_BN)(x, act, train)
 
         # Layer 3
         for i in range(LAYERS[self.architecture][2]):
@@ -415,7 +436,8 @@ class ResNet(nn.Module):
                            downsample=i == 0,
                            param_dict=params,
                            block_name=f'block3_{i}',
-                           dtype=self.dtype)(x, act, train)
+                           dtype=self.dtype,
+                           freezed_BN=self.freezed_BN)(x, act, train)
 
         # Layer 4
         for i in range(LAYERS[self.architecture][3]):
@@ -425,7 +447,8 @@ class ResNet(nn.Module):
                            downsample=i == 0,
                            param_dict=params,
                            block_name=f'block4_{i}',
-                           dtype=self.dtype)(x, act, train)
+                           dtype=self.dtype,
+                           freezed_BN=self.freezed_BN)(x, act, train)
 
         # Classifier
         x = jnp.mean(x, axis=(-3, -2))
@@ -455,7 +478,8 @@ def ResNet18(output='softmax',
              kernel_init=nn.initializers.lecun_normal(),
              bias_init=nn.initializers.zeros,
              ckpt_dir=None,
-             dtype='float32'):
+             dtype='float32',
+             freezed_BN=False):
     """
     Implementation of the ResNet18 by He et al.
     Reference: https://arxiv.org/abs/1512.03385
@@ -500,7 +524,8 @@ def ResNet18(output='softmax',
                   kernel_init=kernel_init,
                   bias_init=bias_init,
                   ckpt_dir=ckpt_dir,
-                  dtype=dtype)
+                  dtype=dtype,
+                  freezed_BN=freezed_BN)
 
 
 def ResNet34(output='softmax',
@@ -510,7 +535,8 @@ def ResNet34(output='softmax',
              kernel_init=nn.initializers.lecun_normal(),
              bias_init=nn.initializers.zeros,
              ckpt_dir=None,
-             dtype='float32'):
+             dtype='float32',
+             freezed_BN=False):
     """
     Implementation of the ResNet34 by He et al.
     Reference: https://arxiv.org/abs/1512.03385
@@ -555,7 +581,8 @@ def ResNet34(output='softmax',
                   kernel_init=kernel_init,
                   bias_init=bias_init,
                   ckpt_dir=ckpt_dir,
-                  dtype=dtype)
+                  dtype=dtype,
+                  freezed_BN=freezed_BN)
 
 
 def ResNet50(output='softmax',
@@ -565,7 +592,8 @@ def ResNet50(output='softmax',
              kernel_init=nn.initializers.lecun_normal(),
              bias_init=nn.initializers.zeros,
              ckpt_dir=None,
-             dtype='float32'):
+             dtype='float32',
+             freezed_BN=False):
     """
     Implementation of the ResNet50 by He et al.
     Reference: https://arxiv.org/abs/1512.03385
@@ -610,117 +638,8 @@ def ResNet50(output='softmax',
                   kernel_init=kernel_init,
                   bias_init=bias_init,
                   ckpt_dir=ckpt_dir,
-                  dtype=dtype)
-
-
-def ResNet101(output='softmax',
-              pretrained='imagenet',
-              normalize=True,
-              num_classes=1000,
-              kernel_init=nn.initializers.lecun_normal(),
-              bias_init=nn.initializers.zeros,
-              ckpt_dir=None,
-              dtype='float32'):
-    """
-    Implementation of the ResNet101 by He et al.
-    Reference: https://arxiv.org/abs/1512.03385
-
-    The pretrained parameters are taken from:
-    https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
-    
-    Args:
-        output (str):
-            Output of the module. Available options are:
-                - 'softmax': Output is a softmax tensor of shape [N, 1000] 
-                - 'log_softmax': Output is a softmax tensor of shape [N, 1000] 
-                - 'logits': Output is a tensor of shape [N, 1000]
-                - 'activations': Output is a dictionary containing the ResNet activations
-        pretrained (str):
-            Indicates if and what type of weights to load. Options are:
-                - 'imagenet': Loads the network parameters trained on ImageNet
-                - None: Parameters of the module are initialized randomly
-        normalize (bool):
-            If True, the input will be normalized with the ImageNet statistics.
-        num_classes (int):
-            Number of classes.
-        kernel_init (function):
-            A function that takes in a shape and returns a tensor.
-        bias_init (function):
-            A function that takes in a shape and returns a tensor.
-        ckpt_dir (str):
-            The directory to which the pretrained weights are downloaded.
-            Only relevant if a pretrained model is used. 
-            If this argument is None, the weights will be saved to a temp directory.
-        dtype (str): Data type.
-
-    Returns:
-        (nn.Module): ResNet network.
-    """
-    return ResNet(output=output,
-                  pretrained=pretrained,
-                  normalize=normalize,
-                  architecture='resnet101',
-                  num_classes=num_classes,
-                  block=Bottleneck,
-                  kernel_init=kernel_init,
-                  bias_init=bias_init,
-                  ckpt_dir=ckpt_dir,
-                  dtype=dtype)
-
-
-def ResNet152(output='softmax',
-              pretrained='imagenet',
-              normalize=True,
-              num_classes=1000,
-              kernel_init=nn.initializers.lecun_normal(),
-              bias_init=nn.initializers.zeros,
-              ckpt_dir=None,
-              dtype='float32'):
-    """
-    Implementation of the ResNet152 by He et al.
-    Reference: https://arxiv.org/abs/1512.03385
-
-    The pretrained parameters are taken from:
-    https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
-    
-    Args:
-        output (str):
-            Output of the module. Available options are:
-                - 'softmax': Output is a softmax tensor of shape [N, 1000] 
-                - 'log_softmax': Output is a softmax tensor of shape [N, 1000] 
-                - 'logits': Output is a tensor of shape [N, 1000]
-                - 'activations': Output is a dictionary containing the ResNet activations
-        pretrained (str):
-            Indicates if and what type of weights to load. Options are:
-                - 'imagenet': Loads the network parameters trained on ImageNet
-                - None: Parameters of the module are initialized randomly
-        normalize (bool):
-            If True, the input will be normalized with the ImageNet statistics.
-        num_classes (int):
-            Number of classes.
-        kernel_init (function):
-            A function that takes in a shape and returns a tensor.
-        bias_init (function):
-            A function that takes in a shape and returns a tensor.
-        ckpt_dir (str):
-            The directory to which the pretrained weights are downloaded.
-            Only relevant if a pretrained model is used. 
-            If this argument is None, the weights will be saved to a temp directory.
-        dtype (str): Data type.
-
-    Returns:
-        (nn.Module): ResNet network.
-    """
-    return ResNet(output=output,
-                  pretrained=pretrained,
-                  normalize=normalize,
-                  architecture='resnet152',
-                  num_classes=num_classes,
-                  block=Bottleneck,
-                  kernel_init=kernel_init,
-                  bias_init=bias_init,
-                  ckpt_dir=ckpt_dir,
-                  dtype=dtype)
+                  dtype=dtype,
+                  freezed_BN=freezed_BN)
 
 
 # NOTE: this ckpt_dir is just to accomodate docker

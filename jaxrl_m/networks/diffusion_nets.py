@@ -51,6 +51,26 @@ class ScoreActor(nn.Module):
         return eps_pred.reshape(actions.shape)
 
 
+class WrappedScoreActor(nn.Module):
+    encoder: nn.Module
+    time_preprocess: nn.Module
+    cond_encoder: nn.Module
+    reverse_network: nn.Module
+
+    def __call__(self, observations, actions, time, train=False):
+        # flatten actions
+        flat_actions = actions.reshape([actions.shape[0], -1])
+
+        t_ff = self.time_preprocess(time)
+        cond_enc = self.cond_encoder(t_ff, train=train)
+        obs_enc = self.encoder(observations)
+        reverse_input = jnp.concatenate([cond_enc, obs_enc, flat_actions], axis=-1)
+        eps_pred = self.reverse_network(reverse_input, train=train)
+
+        # un-flatten pred sequence
+        return (obs_enc, eps_pred.reshape(actions.shape))
+
+
 class FourierFeatures(nn.Module):
     output_size: int
     learnable: bool = True

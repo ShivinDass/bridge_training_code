@@ -242,7 +242,7 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        "flow_bc_pretrained-freezed-BN": ConfigDict(
+        "flow_bc_pretrained_no2": ConfigDict(
             dict(
                 agent="flow_bc",
                 agent_kwargs=dict(
@@ -262,6 +262,8 @@ def get_config(config_string):
                     goal_relabeling_strategy="uniform",
                     goal_relabeling_kwargs=dict(reached_proportion=0.0),
                     relabel_actions=True,
+                    # NOTE: try using more history to prevent multi-modality and mode collapse
+                    obs_horizon=2,
                     **base_data_config,
                 ),
                 # encoder="resnetv1-34-bridge",
@@ -273,18 +275,23 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        # NOTE: Just for naming
-        "flow_bc_pretrained": ConfigDict(
+        # NOTE: We should test increasing obs_horizon first and then check whether using diffusion policy helps
+        "flow_ddpm_bc_pretrained-freezed-BN": ConfigDict(
             dict(
-                agent="flow_bc",
+                agent="flow_ddpm_bc",
                 agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
+                    score_network_kwargs=dict(
+                        time_dim=32,
+                        num_blocks=3,
+                        dropout_rate=0.1,
+                        hidden_dim=256,
+                        use_layer_norm=True,
                     ),
                     use_proprio=False,
+                    beta_schedule="cosine",
+                    diffusion_steps=20,
+                    action_samples=1,
+                    repeat_last_step=0,
                     learning_rate=3e-4,
                     warmup_steps=2000,
                     decay_steps=int(2e6),
@@ -294,14 +301,12 @@ def get_config(config_string):
                     goal_relabeling_strategy="uniform",
                     goal_relabeling_kwargs=dict(reached_proportion=0.0),
                     relabel_actions=True,
+                    obs_horizon=1,
+                    act_pred_horizon=1,
                     **base_data_config,
                 ),
-                # encoder="resnetv1-34-bridge",
-                # encoder_kwargs=dict(
-                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                # ),
                 encoder="pretrained_resnet34",
-                encoder_kwargs=dict(),
+                encoder_kwargs=dict(freezed_BN=True),
                 **base_real_config,
             )
         ),

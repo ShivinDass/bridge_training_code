@@ -95,7 +95,7 @@ def load_checkpoint(checkpoint_weights_path, checkpoint_config_path):
     # create agent from wandb config
     rng = jax.random.PRNGKey(0)
     rng, construct_rng = jax.random.split(rng)
-    if config["agent"] in ["bc", "flow_bc"]:
+    if config["agent"] in ["bc", "flow_bc", "flow_ddpm_bc"]:
         agent = agents[config["agent"]].create(
             rng=construct_rng,
             observations=example_batch["observations"],

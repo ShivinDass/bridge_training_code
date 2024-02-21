@@ -142,7 +142,7 @@ def main(_):
     # initialize agent
     rng = jax.random.PRNGKey(FLAGS.config.seed)
     rng, construct_rng = jax.random.split(rng)
-    if FLAGS.config.agent in ["bc", "flow_bc"]:
+    if FLAGS.config.agent in ["bc", "flow_bc", "flow_ddpm_bc"]:
         agent = agents[FLAGS.config.agent].create(
             rng=construct_rng,
             observations=example_batch["observations"],
@@ -202,6 +202,8 @@ def main(_):
         timer.tock("total")
 
         if (i + 1) % FLAGS.config.log_interval == 0:
+            if FLAGS.debug:
+                print("Working")
             update_info = jax.device_get(update_info)
             wandb_logger.log({"training": update_info}, step=i)
 

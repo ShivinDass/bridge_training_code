@@ -6,6 +6,7 @@ from .continuous.iql import IQLAgent
 from .continuous.lc_bc import LCBCAgent
 from .continuous.stable_contrastive_rl import StableContrastiveRLAgent
 from .continuous.wrapped_bc import WrappedBCAgent
+from .continuous.wrapped_ddpm_bc import WrappedDDPMBCAgent
 from .pretrain.optical_flow_vae import OpticalFlowVAEAgent
 
 agents = {
@@ -17,6 +18,7 @@ agents = {
     "iql": IQLAgent,
     "stable_contrastive_rl": StableContrastiveRLAgent,
     "flow_bc": WrappedBCAgent,
+    "flow_ddpm_bc": WrappedDDPMBCAgent,
 }
 
 pretrain_agents = {

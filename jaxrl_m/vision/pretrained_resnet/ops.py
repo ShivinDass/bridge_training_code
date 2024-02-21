@@ -153,7 +153,7 @@ class BatchNorm(nn.Module):
 # Freezed Normalization layer
 #---------------------------------------------------------------#
     
-def freezed_batch_norm(x, epsilon=1e-05, momentum=0.99, params=None, dtype='float32'):
+def freezed_batch_norm(x, epsilon=1e-05, momentum=0.99, params=None, dtype='float32', **kwargs):
     if params is None:
         raise ValueError('params must be provided for freezed_batch_norm')
     else:
