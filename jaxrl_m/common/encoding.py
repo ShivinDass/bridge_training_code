@@ -22,7 +22,22 @@ class EncodingWrapper(nn.Module):
     stop_gradient: bool
 
     def __call__(self, observations: Dict[str, jnp.ndarray], train: bool = False) -> jnp.ndarray:
-        encoding = self.encoder(observations["image"], train=train)
+        if len(observations["image"].shape) == 5:
+            # obs history case
+            batch_size, obs_horizon = observations["image"].shape[:2]
+            # fold batch_size into obs_horizon to encode each frame separately
+            obs_image = rearrange(observations["image"], "B T H W C -> (B T) H W C")
+        else:
+            obs_image = observations["image"]
+
+        encoding = self.encoder(obs_image, train=train)
+        
+        if len(observations["image"].shape) == 5:
+            # unfold obs_horizon from batch_size
+            encoding = rearrange(
+                encoding, "(B T) F -> B (T F)", B=batch_size, T=obs_horizon
+            )
+
         if self.use_proprio:
             encoding = jnp.concatenate([encoding, observations["proprio"]], axis=-1)
         if self.stop_gradient:
