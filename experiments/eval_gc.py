@@ -124,7 +124,7 @@ def load_checkpoint(checkpoint_weights_path, checkpoint_config_path):
     def get_action(obs, goal_obs):
         nonlocal rng
         rng, key = jax.random.split(rng)
-        if config["agent"] in ["bc", "flow_bc"]:
+        if config["agent"] in ["bc", "flow_bc", "flow_ddpm_bc"]:
             action = jax.device_get(
                 agent.sample_actions(obs, seed=key, argmax=FLAGS.deterministic)
             )
