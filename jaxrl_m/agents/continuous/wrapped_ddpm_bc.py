@@ -150,7 +150,6 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
             # unbatched input from evaluation
             batch_size = 1
             observations = jax.tree_map(lambda x: x[None], observations)
-            goals = jax.tree_map(lambda x: x[None], goals)
         else:
             batch_size = observations["image"].shape[0]
 
