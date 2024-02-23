@@ -242,6 +242,37 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
+        "flow_bc_pretrained": ConfigDict(
+            dict(
+                agent="flow_bc",
+                agent_kwargs=dict(
+                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
+                    policy_kwargs=dict(
+                        tanh_squash_distribution=False,
+                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
+                        state_dependent_std=False,
+                    ),
+                    use_proprio=False,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                    recon_loss_lambda=0.01,
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    **base_data_config,
+                ),
+                # encoder="resnetv1-34-bridge",
+                # encoder_kwargs=dict(
+                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
+                # ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(),
+                **base_real_config,
+            )
+        ),
         "flow_bc_pretrained_no2": ConfigDict(
             dict(
                 agent="flow_bc",
@@ -275,7 +306,6 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        # NOTE: We should test increasing obs_horizon first and then check whether using diffusion policy helps
         "flow_ddpm_bc_pretrained-freezed-BN": ConfigDict(
             dict(
                 agent="flow_ddpm_bc",
@@ -303,6 +333,40 @@ def get_config(config_string):
                     relabel_actions=True,
                     obs_horizon=1,
                     act_pred_horizon=1,
+                    **base_data_config,
+                ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(freezed_BN=True),
+                **base_real_config,
+            )
+        ),
+        "flow_ddpm_bc_pretrained-freezed-BN_na8": ConfigDict(
+            dict(
+                agent="flow_ddpm_bc",
+                agent_kwargs=dict(
+                    score_network_kwargs=dict(
+                        time_dim=32,
+                        num_blocks=3,
+                        dropout_rate=0.1,
+                        hidden_dim=256,
+                        use_layer_norm=True,
+                    ),
+                    use_proprio=False,
+                    beta_schedule="cosine",
+                    diffusion_steps=20,
+                    action_samples=1,
+                    repeat_last_step=0,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                    recon_loss_lambda=0.01,
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    obs_horizon=1,
+                    act_pred_horizon=8,
                     **base_data_config,
                 ),
                 encoder="pretrained_resnet34",
