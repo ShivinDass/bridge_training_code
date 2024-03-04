@@ -39,7 +39,7 @@ flags.DEFINE_multi_string(
 flags.DEFINE_integer("im_size", None, "Image size", required=True)
 flags.DEFINE_string("video_save_path", None, "Path to save video")
 flags.DEFINE_string("goal_image_path", None, "Path to a single goal image")
-flags.DEFINE_integer("num_timesteps", 80, "num timesteps")
+flags.DEFINE_integer("num_timesteps", 100, "num timesteps")
 flags.DEFINE_bool("blocking", False, "Use the blocking controller")
 flags.DEFINE_spaceseplist("goal_eep", [0.3, 0.0, 0.15], "Goal position")
 flags.DEFINE_spaceseplist("initial_eep", [0.32, -0.03, 0.15], "Initial position")
@@ -253,6 +253,7 @@ def main(_):
         try:
             while t < FLAGS.num_timesteps:
                 if time.time() > last_tstep + STEP_DURATION or FLAGS.blocking:
+
                     image_obs = (
                         obs["image"]
                         .reshape(3, FLAGS.im_size, FLAGS.im_size)
@@ -301,7 +302,7 @@ def main(_):
 
                         # perform environment step
                         obs, _, _, _ = env.step(
-                            action, last_tstep + STEP_DURATION, blocking=FLAGS.blocking
+                            action, last_tstep + (i+1) * STEP_DURATION, blocking=FLAGS.blocking
                         )
 
                         # save image
@@ -318,10 +319,17 @@ def main(_):
             curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             save_path = os.path.join(
                 FLAGS.video_save_path,
-                f"{curr_time}_{policy_name}_sticky_{STICKY_GRIPPER_NUM_STEPS}.mp4",
+                f"{curr_time}_images.npy",
             )
-            video = np.concatenate([np.stack(goals), np.stack(images)], axis=1)
-            imageio.mimsave(save_path, video, fps=1.0 / STEP_DURATION * 3)
+            np.save(save_path, np.stack(images))
+
+            # save_path = os.path.join(
+            #     FLAGS.video_save_path,
+            #     f"{curr_time}_{policy_name}_sticky_{STICKY_GRIPPER_NUM_STEPS}.mp4",
+            # )
+            # video = np.concatenate([np.stack(goals), np.stack(images)], axis=1)
+            # video = np.stack(images)
+            # imageio.mimsave(save_path, video, fps=1.0 / STEP_DURATION * 3)
 
 
 if __name__ == "__main__":
