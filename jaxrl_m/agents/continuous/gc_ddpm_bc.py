@@ -12,7 +12,7 @@ import optax
 from flax.core import FrozenDict
 from jaxrl_m.common.typing import Batch
 from jaxrl_m.common.typing import PRNGKey
-from jaxrl_m.common.common import JaxRLTrainState, ModuleDict, nonpytree_field
+from jaxrl_m.common.common import JaxRLTrainStateWithBatchStats, ModuleDict, nonpytree_field
 from jaxrl_m.common.encoding import GCEncodingWrapper
 
 from jaxrl_m.networks.diffusion_nets import (
@@ -40,13 +40,13 @@ class GCDDPMBCAgent(flax.struct.PyTreeNode):
     Assumes observation histories as input and action sequences as output.
     """
 
-    state: JaxRLTrainState
+    state: JaxRLTrainStateWithBatchStats
     config: dict = nonpytree_field()
     lr_schedules: dict = nonpytree_field()
 
     @partial(jax.jit, static_argnames="pmap_axis")
     def update(self, batch: Batch, pmap_axis: str = None):
-        def actor_loss_fn(params, rng):
+        def actor_loss_fn(params, batch_stats, rng):
             key, rng = jax.random.split(rng)
             time = jax.random.randint(
                 key, (batch["actions"].shape[0],), 0, self.config["diffusion_steps"]
@@ -63,7 +63,7 @@ class GCDDPMBCAgent(flax.struct.PyTreeNode):
 
             rng, key = jax.random.split(rng)
             noise_pred = self.state.apply_fn(
-                {"params": params},  # gradient flows through here
+                {"params": params, "batch_stats": batch_stats},  # gradient flows through here
                 (batch["observations"], batch["goals"]),
                 noisy_actions,
                 time,
@@ -107,7 +107,7 @@ class GCDDPMBCAgent(flax.struct.PyTreeNode):
             input_time = jnp.broadcast_to(time, (current_x.shape[0], 1))
 
             eps_pred = self.state.apply_fn(
-                {"params": self.state.target_params},
+                {"params": self.state.target_params, "batch_stats": self.state.batch_stats},
                 (observations, goals),
                 current_x,
                 input_time,
@@ -246,9 +246,11 @@ class GCDDPMBCAgent(flax.struct.PyTreeNode):
             example_time = jnp.zeros((actions.shape[0], 1))
         else:
             example_time = jnp.zeros((1,))
-        params = model_def.init(
+        params_and_batch_stats = model_def.init(
             init_rng, actor=[(observations, goals), actions, example_time]
-        )["params"]
+        )
+        params = params_and_batch_stats["params"]
+        batch_stats = params_and_batch_stats["batch_stats"]
 
         # no decay
         lr_schedule = optax.warmup_cosine_decay_schedule(
@@ -270,11 +272,12 @@ class GCDDPMBCAgent(flax.struct.PyTreeNode):
         txs = {k: optax.adam(v) for k, v in lr_schedules.items()}
 
         rng, create_rng = jax.random.split(rng)
-        state = JaxRLTrainState.create(
+        state = JaxRLTrainStateWithBatchStats.create(
             apply_fn=model_def.apply,
             params=params,
             txs=txs,
             target_params=params,
+            batch_stats=batch_stats,
             rng=create_rng,
         )
 
