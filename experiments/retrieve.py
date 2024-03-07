@@ -23,6 +23,7 @@ flags.DEFINE_string("prior_dataset_path", None, "Path to the prior dataset.", re
 flags.DEFINE_float("threshold", 0.1, "Threshold for retrieval.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
 flags.DEFINE_string("prefix", "", "Prefix for the output file.")
+flags.DEFINE_integer("act_pred_horizon", 1, "Horizon for the agent.")
 
 config_flags.DEFINE_config_file(
     "config",
@@ -93,6 +94,7 @@ def main(_):
         prior_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
+        act_pred_horizon=FLAGS.act_pred_horizon if FLAGS.act_pred_horizon != 1 else None,
     )
     prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
     sim_scores = []
@@ -100,6 +102,7 @@ def main(_):
         try:
             prior_batch = next(prior_data_iter)
             if len(sim_scores) == 0:
+                logging.info(f"Shape of actions: {prior_batch['actions'].shape}")
                 logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
             prior_embeddings = agent.compute_embeddings(prior_batch)
             sim_scores.append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings, prior_embeddings), axis=0))
@@ -121,9 +124,10 @@ def main(_):
         prior_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
+        act_pred_horizon=FLAGS.act_pred_horizon if FLAGS.act_pred_horizon != 1 else None,
     )
     prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
-    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}", 'train/out.tfrecord')
+    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}_{'prechunk' if FLAGS.act_pred_horizon != 1 else ''}", 'train/out.tfrecord')
     tf.io.gfile.makedirs(os.path.dirname(outpath))
     with tf.io.TFRecordWriter(outpath) as writer:
         current_idx, logger_step = 0, 0
@@ -132,6 +136,7 @@ def main(_):
             try:
                 prior_batch = next(prior_data_iter)
                 if logger_step == 0:
+                    logging.info(f"Shape of actions: {prior_batch['actions'].shape}")
                     logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
                 current_mask = mask[current_idx:current_idx+len(prior_batch['terminals'])]
                 current_idx += len(prior_batch['terminals'])

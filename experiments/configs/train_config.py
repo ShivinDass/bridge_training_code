@@ -340,6 +340,75 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
+        "gc_ddpm_bc_pretrained-freezed-BN_na8": ConfigDict(
+            dict(
+                agent="gc_ddpm_bc",
+                agent_kwargs=dict(
+                    score_network_kwargs=dict(
+                        time_dim=32,
+                        num_blocks=3,
+                        dropout_rate=0.1,
+                        hidden_dim=256,
+                        use_layer_norm=True,
+                    ),
+                    early_goal_concat=False,
+                    shared_goal_encoder=False,
+                    use_proprio=False,
+                    beta_schedule="cosine",
+                    diffusion_steps=20,
+                    action_samples=1,
+                    repeat_last_step=0,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    actor_decay_steps=int(2e6),
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    obs_horizon=1,
+                    act_pred_horizon=8,
+                    **base_data_config,
+                ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(freezed_BN=True),
+                **base_real_config,
+            )
+        ),
+        "ddpm_bc_pretrained-freezed-BN_na8": ConfigDict(
+            dict(
+                agent="flow_ddpm_bc",
+                agent_kwargs=dict(
+                    score_network_kwargs=dict(
+                        time_dim=32,
+                        num_blocks=3,
+                        dropout_rate=0.1,
+                        hidden_dim=256,
+                        use_layer_norm=True,
+                    ),
+                    use_proprio=False,
+                    beta_schedule="cosine",
+                    diffusion_steps=20,
+                    action_samples=1,
+                    repeat_last_step=0,
+                    learning_rate=3e-4,
+                    warmup_steps=2000,
+                    decay_steps=int(2e6),
+                    recon_loss_lambda=0,
+                ),
+                dataset_kwargs=dict(
+                    goal_relabeling_strategy="uniform",
+                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
+                    relabel_actions=True,
+                    obs_horizon=1,
+                    act_pred_horizon=8,
+                    **base_data_config,
+                ),
+                encoder="pretrained_resnet34",
+                encoder_kwargs=dict(freezed_BN=True),
+                **base_real_config,
+            )
+        ),
         "flow_ddpm_bc_pretrained-freezed-BN_na8": ConfigDict(
             dict(
                 agent="flow_ddpm_bc",
@@ -364,9 +433,11 @@ def get_config(config_string):
                 dataset_kwargs=dict(
                     goal_relabeling_strategy="uniform",
                     goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
+                    # relabel_actions=True,
+                    relabel_actions=False, # Don't use the observations to relabel the actions since we already prechunk the actions
                     obs_horizon=1,
                     act_pred_horizon=8,
+                    prechunk_act=True,
                     **base_data_config,
                 ),
                 encoder="pretrained_resnet34",

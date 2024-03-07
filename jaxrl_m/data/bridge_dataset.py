@@ -145,6 +145,7 @@ class BridgeDataset:
         augment_next_obs_goal_differently: bool = False,
         augment_kwargs: dict = {},
         act_pred_horizon: Optional[int] = None,
+        prechunk_act: bool = False,
         obs_horizon: Optional[int] = None,
         load_language: bool = False,
         skip_unlabeled: bool = False,
@@ -168,12 +169,15 @@ class BridgeDataset:
         self.augment_kwargs = augment_kwargs
         self.augment_next_obs_goal_differently = augment_next_obs_goal_differently
         self.act_pred_horizon = act_pred_horizon
+        self.prechunk_act = prechunk_act
         self.obs_horizon = obs_horizon
         self.is_train = train
         self.load_language = load_language
 
         if self.load_language:
             self.PROTO_TYPE_SPEC["language"] = tf.string
+        if self.act_pred_horizon is not None:
+            self.goal_relabeling_kwargs["act_pred_horizon"] = self.act_pred_horizon
 
         # construct a dataset for each sub-list of paths
         datasets = []
@@ -322,6 +326,7 @@ class BridgeDataset:
             )
 
         # normalize actions and proprio
+        # NOTE: Not sure whether the action_proprio_meta we're using matches the relabeled actions
         if self.action_proprio_metadata is not None:
             if self.normalization_type == "normal":
                 # normalize to mean 0, std 1
@@ -359,7 +364,7 @@ class BridgeDataset:
 
     def _chunk_act_obs(self, traj):
         traj_len = len(traj["actions"])
-        if self.act_pred_horizon is not None:
+        if self.act_pred_horizon is not None and not self.prechunk_act:
             chunk_indices = tf.broadcast_to(
                 tf.range(self.act_pred_horizon), [traj_len, self.act_pred_horizon]
             ) + tf.broadcast_to(

@@ -13,7 +13,7 @@ structure.
 import tensorflow as tf
 
 
-def uniform(traj, *, reached_proportion):
+def uniform(traj, *, reached_proportion, act_pred_horizon=None):
     """
     Relabels with a true uniform distribution over future states. With
     probability reached_proportion, observations[i] gets a goal
@@ -25,7 +25,11 @@ def uniform(traj, *, reached_proportion):
 
     # select a random future index for each transition i in the range [i + 1, traj_len)
     rand = tf.random.uniform([traj_len])
-    low = tf.cast(tf.range(traj_len) + 1, tf.float32)
+    if act_pred_horizon is not None:
+        # if act_pred_horizon is set, we sample from [i + act_pred_horizon, traj_len)
+        low = tf.cast(tf.range(traj_len) + act_pred_horizon, tf.float32)
+    else:
+        low = tf.cast(tf.range(traj_len) + 1, tf.float32)
     high = tf.cast(traj_len, tf.float32)
     goal_idxs = tf.cast(rand * (high - low) + low, tf.int32)
 

@@ -130,6 +130,8 @@ def main(_):
     )
 
     example_batch = next(train_data_iter)
+    if FLAGS.config.dataset_kwargs.get("act_pred_horizon") is not None:
+        assert len(example_batch["actions"].shape) == 3 and example_batch["actions"].shape[1] == FLAGS.config.dataset_kwargs["act_pred_horizon"]
     logging.info(f"Batch size: {example_batch['observations']['image'].shape[0]}")
     logging.info(f"Number of devices: {num_devices}")
     logging.info(
@@ -172,6 +174,8 @@ def main(_):
 
         timer.tick("dataset")
         batch = next(train_data_iter)
+        if FLAGS.config.dataset_kwargs.get("act_pred_horizon") is not None:
+            assert len(batch["actions"].shape) == 3 and batch["actions"].shape[1] == FLAGS.config.dataset_kwargs["act_pred_horizon"]
         timer.tock("dataset")
 
         timer.tick("train")

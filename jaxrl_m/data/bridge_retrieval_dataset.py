@@ -16,6 +16,50 @@ from absl import logging
 from jaxrl_m.data.tf_augmentations import augment, random_resized_crop
 
 
+@tf.function(jit_compile=True)
+def _binarize_gripper_actions(actions):
+    """Converts gripper actions from continous to binary values (0 and 1).
+
+    We exploit that fact that most of the time, the gripper is fully open (near
+    1.0) or fully closed (near 0.0). As it transitions between the two, it
+    sometimes passes through a few intermediate values. We relabel those
+    intermediate values based on the state that is reached _after_ those
+    intermediate values.
+
+    In the edge case that the trajectory ends with an intermediate value, we
+    give up on binarizing and relabel that chunk of intermediate values as
+    the last action in the trajectory.
+
+    The scan implements the following code:
+
+    new_actions = np.empty_like(actions)
+    carry = actions[-1]
+    for i in reversed(range(actions.shape[0])):
+        if in_between_mask[i]:
+            carry = carry
+        else:
+            carry = float(open_mask[i])
+        new_actions[i] = carry
+    """
+    open_mask = actions > 0.95
+    closed_mask = actions < 0.05
+    in_between_mask = tf.logical_not(tf.logical_or(open_mask, closed_mask))
+
+    is_open_float = tf.cast(open_mask, tf.float32)
+
+    def scan_fn(carry, i):
+        return tf.cond(
+            in_between_mask[i],
+            lambda: tf.cast(carry, tf.float32),
+            lambda: is_open_float[i],
+        )
+
+    new_actions = tf.scan(
+        scan_fn, tf.range(tf.shape(actions)[0]), actions[-1], reverse=True
+    )
+    return new_actions
+
+
 class BridgeRetrievalDataset:
     """
     Args:
@@ -33,15 +77,19 @@ class BridgeRetrievalDataset:
         self,
         data_paths: List[Union[str, List[str]]],
         seed: int,
+        relabel_actions: bool = True,
         batch_size: int = 256,
         cache: bool = False,
+        act_pred_horizon: Optional[int] = None,
         load_language: bool = False,
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
         sample_weights = [1 / len(data_paths)] * len(data_paths)
 
+        self.relabel_actions = relabel_actions
         self.cache = cache
+        self.act_pred_horizon = act_pred_horizon
         self.load_language = load_language
 
         if self.load_language:
@@ -89,6 +137,13 @@ class BridgeRetrievalDataset:
 
         # yields trajectories
         dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
+
+        # yields trajectories
+        dataset = dataset.map(
+            self._process_actions, num_parallel_calls=tf.data.AUTOTUNE
+        )
+        # yields trajectories
+        dataset = dataset.map(self._chunk_act_obs, num_parallel_calls=tf.data.AUTOTUNE)
 
         # cache before add_goals because add_goals introduces randomness
         if self.cache:
@@ -142,6 +197,39 @@ class BridgeRetrievalDataset:
             "image_flows": parsed_tensors["image_flows"],
         }
 
+    def _process_actions(self, traj):
+        if self.relabel_actions:
+            # relabel the first 6 action dims (xyz position, xyz rotation)
+            # using the reached proprio
+            movement_actions = (
+                traj["next_observations"]["proprio"][:, :6]
+                - traj["observations"]["proprio"][:, :6]
+            )
+            # binarize the gripper action
+            continuous_gripper_actions = traj["actions"][:, 6]
+            binarized_gripper_actions = _binarize_gripper_actions(
+                continuous_gripper_actions
+            )
+
+            traj["actions"] = tf.concat(
+                [movement_actions, binarized_gripper_actions[:, None]], axis=1
+            )
+
+        return traj
+
+    def _chunk_act_obs(self, traj):
+        traj_len = len(traj["actions"])
+        if self.act_pred_horizon is not None:
+            chunk_indices = tf.broadcast_to(
+                tf.range(self.act_pred_horizon), [traj_len, self.act_pred_horizon]
+            ) + tf.broadcast_to(
+                tf.range(traj_len)[:, None], [traj_len, self.act_pred_horizon]
+            )
+            # pads by repeating the last action
+            chunk_indices = tf.minimum(chunk_indices, traj_len - 1)
+            traj["action_chunks"] = tf.gather(traj["actions"], chunk_indices)
+        return traj
+
     def _add_goals(self, traj):
         if self.load_language:
             lang_idx = tf.random.uniform(
@@ -152,6 +240,10 @@ class BridgeRetrievalDataset:
                 lang, tf.shape(traj["terminals"])
             )
             traj.pop("language")
+            
+        # after goal relabeling, we can set actions and obs to chunked version
+        if "action_chunks" in traj:
+            traj["actions"] = traj.pop("action_chunks")
         return traj
 
     def iterator(self):
