@@ -60,7 +60,7 @@ def process(path):
     with tf.io.gfile.GFile(path, "rb") as f:
         arr = np.load(f, allow_pickle=True)
     dirname = os.path.dirname(os.path.abspath(path))
-    outpath = os.path.join(FLAGS.output_path, *dirname.split(os.sep)[-FLAGS.depth :])
+    outpath = os.path.join(FLAGS.output_path, *dirname.split(os.sep)[-(FLAGS.depth+1):])
     outpath = f"{outpath}/out.tfrecord"
 
     if tf.io.gfile.exists(outpath):
