@@ -52,7 +52,8 @@ STEP_DURATION = 0.2
 NO_PITCH_ROLL = False
 NO_YAW = False
 STICKY_GRIPPER_NUM_STEPS = 1
-WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.35, 0.25, 0.2, 1.57, 0]])
+#WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.35, 0.25, 0.2, 1.57, 0]])
+WORKSPACE_BOUNDS = np.array([[0.1, -0.1, 0.05, -1.57, 0], [0.40, 0.25, 0.25, 1.57, 0]])
 CAMERA_TOPICS = [IMTopic("/blue/image_raw")]
 FIXED_STD = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -233,7 +234,8 @@ def main(_):
         try:
             if FLAGS.initial_eep is not None:
                 assert isinstance(FLAGS.initial_eep, list)
-                initial_eep = [float(e) for e in FLAGS.initial_eep]
+                initial_eep = np.random.uniform(np.array(FLAGS.initial_eep, dtype=np.float64) - 0.01, np.array(FLAGS.initial_eep, dtype=np.float64) + 0.01).tolist()
+                # initial_eep = [float(e) for e in FLAGS.initial_eep]
                 env.controller().move_to_state(initial_eep, 0, duration=1.5)
                 env._reset_previous_qpos()
         except Exception as e:
