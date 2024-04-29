@@ -1,23 +1,64 @@
 import ml_collections
 
 ACT_MEAN = [
-    1.9296819e-04,
-    1.3667766e-04,
-    -1.4583133e-04,
-    -1.8390431e-04,
-    -3.0808983e-04,
-    2.7425270e-04,
-    5.9716219e-01,
+    ###### Bridge default #####
+    # 1.9296819e-04,
+    # 1.3667766e-04,
+    # -1.4583133e-04,
+    # -1.8390431e-04,
+    # -3.0808983e-04,
+    # 2.7425270e-04,
+    # 5.9716219e-01,
+
+    ##### Viper_x_pot #####
+    0.00227883,
+    0.00154444,
+    -0.00229705,
+    -0.0013669,
+    -0.00198731,
+    0.00193355,
+    0.65677481
 ]
 
 ACT_STD = [
-    0.00912848,
-    0.0127196,
-    0.01229497,
-    0.02606696,
-    0.02875283,
-    0.07807977,
-    0.48710242,
+    ###### Bridge default #####
+    # 0.00912848,
+    # 0.0127196,
+    # 0.01229497,
+    # 0.02606696,
+    # 0.02875283,
+    # 0.07807977,
+    # 0.48710242,
+
+    ##### Viper_x_pot #####
+    0.00990546,
+    0.01049463,
+    0.01018103,
+    0.00905978,
+    0.01723201,
+    0.01993144,
+    0.47299017
+]
+
+# NOTE: we would not use proprioception anyways
+PROPRIO_MEAN =[
+    0.29414398,
+    0.05308576,
+    0.13111071,
+    -0.066769,
+    -0.12331675,
+    0.11321178,
+    0.72671092
+]
+
+PROPRIO_STD = [
+    0.05813769,
+    0.080115,
+    0.06733975,
+    0.06441016,
+    0.10455791,
+    0.14951433,
+    0.34510486
 ]
 
 ACTION_PROPRIO_METADATA = {
@@ -25,99 +66,84 @@ ACTION_PROPRIO_METADATA = {
         "mean": ACT_MEAN,
         "std": ACT_STD,
         # TODO compute these
-        "min": ACT_MEAN,
-        "max": ACT_STD,
+        # "min": ACT_MEAN,
+        # "max": ACT_STD,
     },
     # TODO compute these
-    "proprio": {"mean": ACT_MEAN, "std": ACT_STD, "min": ACT_MEAN, "max": ACT_STD},
+    "proprio": {
+        "mean": PROPRIO_MEAN,
+        "std": PROPRIO_STD,
+        # "min": ACT_MEAN,
+        # "max": ACT_STD
+    },
 }
 
 
 def get_config(config_string):
-    possible_structures = {
-        "all": ml_collections.ConfigDict(
-            {
-                "include": [
-                    [
-                        "icra/?*/?*/?*",
-                        "flap/?*/?*/?*",
-                        "bridge_data_v1/berkeley/?*/?*",
-                        "rss/?*/?*/?*",
-                        "bridge_data_v2/?*/?*/?*",
-                        "scripted/?*",
-                    ]
-                ],
-                "exclude": [],
-                "sample_weights": None,
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x": ml_collections.ConfigDict(
-            {
-                "include": [
-                    [
-                        "few-shot-IL/?*",
-                    ]
-                ],
-                "exclude": [],
-                "sample_weights": None,
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x-40": ml_collections.ConfigDict(
-            {
-                "include": [
-                    [
-                        "few-shot-IL-50/?*",
-                    ]
-                ],
-                "exclude": [],
-                "sample_weights": None,
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x+bridgedata_v2": ml_collections.ConfigDict(
-            {
-                "include": [
-                    ["few-shot-IL/?*", "bridge_data_v2/?*/?*/?*"]
-                ],
-                "exclude": [],
-                "sample_weights": None,
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x+bridgedata_v2_balance": ml_collections.ConfigDict(
-            {
-                "include": [
-                    ["few-shot-IL/?*"],
-                    ["bridge_data_v2/?*/?*/?*"]
-                ],
-                "exclude": [],
-                "sample_weights": [0.5, 0.5],
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x-40+bridgedata_v2_balance": ml_collections.ConfigDict(
-            {
-                "include": [
-                    ["few-shot-IL-50/?*"],
-                    ["bridge_data_v2/?*/?*/?*"]
-                ],
-                "exclude": [],
-                "sample_weights": [0.5, 0.5],
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        ),
-        "viper_x+retrieved_0.1_balance": ml_collections.ConfigDict(
-            {
-                "include": [
-                    ["few-shot-IL/?*"],
-                    ["bridge_data_v2_0.1"]
-                ],
-                "exclude": [],
-                "sample_weights": [0.5, 0.5],
-                "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            }
-        )
+    actual_dataset_map = {
+        "viper_x_pot": "viper_x_pot",
+        "viper_x_pot_h8": "viper_x_pot_h8", # h8 means the optical flow is computed from t to t+8
+        "viper_x_microwave_h8": "viper_x_microwave_h8",
+        "viper_x_microwave_good_start_pos_h8": "viper_x_microwave_good-start-pos_h8", # good-start-pos means the data collection has the same initial position as evaluation
+        "bridgedata_v2": "bridge_data_v2/?*/?*/?*",
+        "bridgedata_v2_h8": "bridge_data_v2_h8/?*/?*/?*",
     }
-    return possible_structures[config_string]
+    general_dataset_map = {
+        "flow_retrieved": "{}_bridge_data_v2_h8_{}_prechunk",
+        "br_retrieved": "{}_bridge_data_v2_h8_br_{}_prechunk",
+        "sailor_retrieved": "{}_bridge_data_v2_h8_sailor_{}_prechunk",
+    }
+
+    sample_weights = None
+    if len(config_string.split('-')) > 1:
+        sample_option = config_string.split('-')[1]
+        if sample_option == "balance":
+            sample_weights = [0.5, 0.5]
+        else:
+            raise ValueError(f"Unknown sample option: {sample_option}")
+
+    dataset_config_string = config_string.split('-')[0]
+    if len(dataset_config_string.split('+')) == 1:
+        target_dataset = dataset_config_string
+        include = [
+            [actual_dataset_map[target_dataset]]
+        ]
+    else:
+        target_dataset, prior_dataset = dataset_config_string.split('+')
+        if actual_dataset_map.get(prior_dataset) is not None:
+            include = [
+                [actual_dataset_map[target_dataset]],
+                [actual_dataset_map[prior_dataset]]
+            ]
+        else:
+            # hacky
+            if 'pot' in target_dataset:
+                task = 'pot'
+            elif 'microwave_good_start_pos' in target_dataset:
+                task = 'microwave_good-start-pos'
+            else:
+                task = 'microwave'
+                
+
+            found = False
+            for retrieval_method in general_dataset_map.keys():
+                print(retrieval_method)
+                if prior_dataset.startswith(retrieval_method):
+                    retrieval_threshold = prior_dataset.split('_')[-1]
+                    include = [
+                        [f"{actual_dataset_map[target_dataset]}_prechunk"], # prechunk is required by retrieval-based methods
+                        [general_dataset_map[retrieval_method].format(task, retrieval_threshold)]
+                    ]
+                    found = True
+                    break
+            if not found:
+                raise ValueError(f"Unknown dataset: {prior_dataset}")
+
+    return ml_collections.ConfigDict(
+        {
+            "include": include,
+            "exclude": [],
+            "sample_weights": sample_weights,
+            "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+        }
+    )
