@@ -158,6 +158,7 @@ class BridgeRetrievalDataset:
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
         "observations/state": tf.float32,
+        "next_observations/state": tf.float32,
         "actions": tf.float32,
         "terminals": tf.bool,
         "image_flows": tf.float32,
@@ -179,6 +180,9 @@ class BridgeRetrievalDataset:
             "observations": {
                 "image": parsed_tensors["observations/images0"],
                 "proprio": parsed_tensors["observations/state"],
+            },
+            "next_observations": {
+                "proprio": parsed_tensors["next_observations/state"],
             },
             **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
@@ -203,7 +207,6 @@ class BridgeRetrievalDataset:
             traj["actions"] = tf.concat(
                 [movement_actions, binarized_gripper_actions[:, None]], axis=1
             )
-
         return traj
 
     def _chunk_act_obs(self, traj):
