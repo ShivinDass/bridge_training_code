@@ -23,3 +23,4 @@ pyquaternion
 opencv-python
 opencv-contrib-python
 funcsigs
+torch==2.3.0 # typing-extensions package seems to conflict with tensorflow
