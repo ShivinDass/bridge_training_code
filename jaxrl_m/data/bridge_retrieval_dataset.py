@@ -100,10 +100,7 @@ class BridgeRetrievalDataset:
         for sub_data_paths in data_paths:
             datasets.append(self._construct_tf_dataset(sub_data_paths, seed))
 
-        # for validation, we want to be able to iterate through the entire dataset;
-        # for training, we want to make sure that no sub-dataset is ever exhausted
-        # or the sampling ratios will be off. this should never happen because of the
-        # repeat() above, but `stop_on_empty_dataset` is a safeguard
+        # we want to be able to iterate through the entire dataset, so keep stop_on_empty_dataset as False (the defauyylt value)
         dataset = tf.data.Dataset.sample_from_datasets(
             datasets, sample_weights, seed=seed
         )
@@ -161,11 +158,8 @@ class BridgeRetrievalDataset:
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
         "observations/state": tf.float32,
-        "next_observations/images0": tf.uint8,
-        "next_observations/state": tf.float32,
         "actions": tf.float32,
         "terminals": tf.bool,
-        "truncates": tf.bool,
         "image_flows": tf.float32,
     }
 
@@ -186,14 +180,9 @@ class BridgeRetrievalDataset:
                 "image": parsed_tensors["observations/images0"],
                 "proprio": parsed_tensors["observations/state"],
             },
-            "next_observations": {
-                "image": parsed_tensors["next_observations/images0"],
-                "proprio": parsed_tensors["next_observations/state"],
-            },
             **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
             "terminals": parsed_tensors["terminals"],
-            "truncates": parsed_tensors["truncates"],
             "image_flows": parsed_tensors["image_flows"],
         }
 

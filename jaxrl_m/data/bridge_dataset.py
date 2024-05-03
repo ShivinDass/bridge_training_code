@@ -271,11 +271,8 @@ class BridgeDataset:
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
         "observations/state": tf.float32,
-        "next_observations/images0": tf.uint8,
-        "next_observations/state": tf.float32,
         "actions": tf.float32,
         "terminals": tf.bool,
-        "truncates": tf.bool,
         "image_flows": tf.float32,
     }
 
@@ -296,14 +293,9 @@ class BridgeDataset:
                 "image": parsed_tensors["observations/images0"],
                 "proprio": parsed_tensors["observations/state"],
             },
-            "next_observations": {
-                "image": parsed_tensors["next_observations/images0"],
-                "proprio": parsed_tensors["next_observations/state"],
-            },
             **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
             "terminals": parsed_tensors["terminals"],
-            "truncates": parsed_tensors["truncates"],
             "image_flows": parsed_tensors["image_flows"],
         }
 

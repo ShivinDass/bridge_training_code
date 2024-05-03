@@ -14,7 +14,7 @@ from jaxrl_m.agents import pretrain_agents
 from jaxrl_m.common.common import shard_batch
 from jaxrl_m.common.wandb import WandBLogger
 from jaxrl_m.data.bridge_dataset import glob_to_path_list
-from jaxrl_m.data.bridge_optical_flow_dataset import BridgeOpticalFlowDataset
+from jaxrl_m.data.bridge_optical_flow_vae_dataset import BridgeOpticalFlowVAEDataset
 from jaxrl_m.utils.timer_utils import Timer
 from jaxrl_m.vision import encoders, decoders
 from jaxrl_m.data.text_processing import text_processors
@@ -89,7 +89,7 @@ def main(_):
         for sub_list in task_paths
     ]
 
-    train_data = BridgeOpticalFlowDataset(
+    train_data = BridgeOpticalFlowVAEDataset(
         train_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
@@ -97,7 +97,7 @@ def main(_):
         sample_weights=FLAGS.bridgedata_config.sample_weights,
         **FLAGS.config.dataset_kwargs,
     )
-    val_data = BridgeOpticalFlowDataset(
+    val_data = BridgeOpticalFlowVAEDataset(
         val_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,

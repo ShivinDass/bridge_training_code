@@ -17,7 +17,7 @@ from jaxrl_m.data.tf_augmentations import random_resized_crop
 from jaxrl_m.data.tf_goal_relabeling import GOAL_RELABELING_FUNCTIONS
 
 
-class BridgeOpticalFlowDataset:
+class BridgeOpticalFlowVAEDataset:
     """
     Args:
         data_paths: List of paths to the data files. If a list of list of paths
@@ -46,7 +46,6 @@ class BridgeOpticalFlowDataset:
         sample_weights: Optional[List[float]] = None,
         batch_size: int = 256,
         shuffle_buffer_size: int = 10000,
-        cache: bool = False,
         train: bool = True,
         augment: bool = False,
         augment_kwargs: dict = {},
@@ -61,7 +60,6 @@ class BridgeOpticalFlowDataset:
         assert len(data_paths) == len(sample_weights)
         assert np.isclose(sum(sample_weights), 1.0)
 
-        self.cache = cache
         self.augment_kwargs = augment_kwargs
         self.is_train = train
 
@@ -94,7 +92,7 @@ class BridgeOpticalFlowDataset:
             dataset = dataset.enumerate(start=seed)
             dataset = dataset.map(self._augment, num_parallel_calls=tf.data.AUTOTUNE)
 
-        # NOTE: this is just a hack for viper_x data
+        # NOTE: this is just a hack for viper_x data since the validation data is too small
         if train:
             dataset = dataset.batch(
                 batch_size,
@@ -128,24 +126,17 @@ class BridgeOpticalFlowDataset:
         # yields trajectories
         dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
 
-        # cache before add_goals because add_goals introduces randomness
-        if self.cache:
-            dataset = dataset.cache()
-
         # unbatch to yield individual transitions
-        dataset = dataset.unbatch()
+        # NOTE: unbatch is slow
+        # dataset = dataset.unbatch()
+        # dataset = dataset.flat_map(tf.data.Dataset.from_tensor_slices)
+        dataset = dataset.interleave(tf.data.Dataset.from_tensor_slices, num_parallel_calls=tf.data.AUTOTUNE)
 
         return dataset
 
     # the expected type spec for the serialized examples
+    # NOTE: only decode the stuff we want
     PROTO_TYPE_SPEC = {
-        "observations/images0": tf.uint8,
-        "observations/state": tf.float32,
-        "next_observations/images0": tf.uint8,
-        "next_observations/state": tf.float32,
-        "actions": tf.float32,
-        "terminals": tf.bool,
-        "truncates": tf.bool,
         "image_flows": tf.float32,
     }
 
