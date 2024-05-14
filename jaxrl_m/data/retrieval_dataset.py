@@ -60,55 +60,42 @@ def _binarize_gripper_actions(actions):
     return new_actions
 
 
-class BridgeRetrievalDataset:
+class RetrievalDataset:
     """
     Args:
         data_paths: List of paths to the data files. If a list of list of paths
             is provided, the data will be sampled from each sub-list according
             to "sample_weights".
-        seed: Random seed.
         batch_size: Batch size.
-        shuffle_buffer_size: Size of the shuffle buffer. It is split between
-            sub-datasets by `sample_weights`.
-        cache: Whether to cache the dataset in memory.
     """
 
     def __init__(
         self,
         data_paths: List[Union[str, List[str]]],
-        seed: int,
         relabel_actions: bool = True,
         batch_size: int = 256,
-        cache: bool = False,
         act_pred_horizon: Optional[int] = None,
-        load_language: bool = False,
+        include_future_obs: bool = False,
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
-        sample_weights = [1 / len(data_paths)] * len(data_paths)
 
         self.relabel_actions = relabel_actions
-        self.cache = cache
         self.act_pred_horizon = act_pred_horizon
-        self.load_language = load_language
+        self.include_future_obs = include_future_obs
 
-        if self.load_language:
-            self.PROTO_TYPE_SPEC["language"] = tf.string
+        if self.relabel_actions:
+            self.PROTO_TYPE_SPEC["observations/state"] = tf.float32
+            self.PROTO_TYPE_SPEC["next_observations/state"] = tf.float32
 
         # construct a dataset for each sub-list of paths
         datasets = []
         for sub_data_paths in data_paths:
-            datasets.append(self._construct_tf_dataset(sub_data_paths, seed))
+            datasets.append(self._construct_tf_dataset(sub_data_paths))
 
-        # we want to be able to iterate through the entire dataset, so keep stop_on_empty_dataset as False (the defauyylt value)
-        dataset = tf.data.Dataset.sample_from_datasets(
-            datasets, sample_weights, seed=seed
-        )
-
-        if self.load_language:
-            dataset = dataset.filter(
-                lambda x: tf.math.reduce_any(x["goal_language"] != "")
-            )
+        dataset = datasets[0]
+        for i in range(1, len(datasets)):
+            dataset = dataset.concatenate(datasets[i])        
 
         dataset = dataset.batch(
             batch_size,
@@ -119,15 +106,13 @@ class BridgeRetrievalDataset:
 
         self.tf_dataset = dataset
 
-    def _construct_tf_dataset(self, paths: List[str], seed: int) -> tf.data.Dataset:
+    def _construct_tf_dataset(self, paths: List[str]) -> tf.data.Dataset:
         """
         Constructs a tf.data.Dataset from a list of paths.
         The dataset yields a dictionary of tensors for each transition.
         """
 
-        # shuffle again using the dataset API so the files are read in a
-        # different order every epoch
-        dataset = tf.data.Dataset.from_tensor_slices(paths).shuffle(len(paths), seed)
+        dataset = tf.data.Dataset.from_tensor_slices(paths)
 
         # yields raw serialized examples
         dataset = tf.data.TFRecordDataset(dataset, num_parallel_reads=tf.data.AUTOTUNE)
@@ -136,31 +121,27 @@ class BridgeRetrievalDataset:
         dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
-        dataset = dataset.map(
-            self._process_actions, num_parallel_calls=tf.data.AUTOTUNE
-        )
-        # yields trajectories
-        dataset = dataset.map(self._chunk_act_obs, num_parallel_calls=tf.data.AUTOTUNE)
-
-        # cache before add_goals because add_goals introduces randomness
-        if self.cache:
-            dataset = dataset.cache()
+        dataset = dataset.map(self._process_actions, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
-        dataset = dataset.map(self._add_goals, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.map(self._chunk_act, num_parallel_calls=tf.data.AUTOTUNE)
+
+        # yields trajectories
+        if self.include_future_obs:
+            dataset = dataset.map(self._add_future_obs, num_parallel_calls=tf.data.AUTOTUNE)
 
         # unbatch to yield individual transitions
-        dataset = dataset.unbatch()
+        # NOTE: unbatch is slow
+        # dataset = dataset.unbatch()
+        # NOTE: we want to keep the order here (for visualization)
+        dataset = dataset.flat_map(tf.data.Dataset.from_tensor_slices)
 
         return dataset
 
     # the expected type spec for the serialized examples
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
-        "observations/state": tf.float32,
-        "next_observations/state": tf.float32,
         "actions": tf.float32,
-        "terminals": tf.bool,
         "image_flows": tf.float32,
     }
 
@@ -179,14 +160,12 @@ class BridgeRetrievalDataset:
         return {
             "observations": {
                 "image": parsed_tensors["observations/images0"],
-                "proprio": parsed_tensors["observations/state"],
+                **({"proprio": parsed_tensors["observations/state"]} if self.relabel_actions else {}),
             },
             "next_observations": {
-                "proprio": parsed_tensors["next_observations/state"],
+                **({"proprio": parsed_tensors["next_observations/state"]} if self.relabel_actions else {}),
             },
-            **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
-            "terminals": parsed_tensors["terminals"],
             "image_flows": parsed_tensors["image_flows"],
         }
 
@@ -209,7 +188,7 @@ class BridgeRetrievalDataset:
             )
         return traj
 
-    def _chunk_act_obs(self, traj):
+    def _chunk_act(self, traj):
         traj_len = len(traj["actions"])
         if self.act_pred_horizon is not None:
             chunk_indices = tf.broadcast_to(
@@ -219,23 +198,16 @@ class BridgeRetrievalDataset:
             )
             # pads by repeating the last action
             chunk_indices = tf.minimum(chunk_indices, traj_len - 1)
-            traj["action_chunks"] = tf.gather(traj["actions"], chunk_indices)
+            traj["action"] = tf.gather(traj["actions"], chunk_indices)
         return traj
 
-    def _add_goals(self, traj):
-        if self.load_language:
-            lang_idx = tf.random.uniform(
-                shape=[], maxval=len(traj["language"]), dtype=tf.int32
-            )
-            lang = traj["language"][lang_idx]
-            traj["goal_language"] = tf.broadcast_to(
-                lang, tf.shape(traj["terminals"])
-            )
-            traj.pop("language")
-            
-        # after goal relabeling, we can set actions and obs to chunked version
-        if "action_chunks" in traj:
-            traj["actions"] = traj.pop("action_chunks")
+    def _add_future_obs(self, traj):
+        traj_len = len(traj["actions"])
+        future_obs_indices = tf.range(traj_len) + self.act_pred_horizon
+        future_obs_indices = tf.minimum(future_obs_indices, traj_len - 1)
+        traj["next_observations"] = {
+            "image": tf.gather(traj["observations"]["image"], future_obs_indices),
+        }
         return traj
 
     def iterator(self):
