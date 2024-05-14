@@ -10,7 +10,7 @@ from ml_collections import config_flags
 import scipy
 
 from jaxrl_m.agents import pretrain_agents
-from jaxrl_m.data.bridge_dataset import glob_to_path_list
+from jaxrl_m.data.bc_dataset import glob_to_path_list
 from jaxrl_m.data.bridge_retrieval_dataset import BridgeRetrievalDataset
 from jaxrl_m.vision import encoders, decoders
 from jaxrl_m.data.text_processing import text_processors
@@ -125,6 +125,7 @@ def main(_):
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
         act_pred_horizon=FLAGS.act_pred_horizon if FLAGS.act_pred_horizon != 1 else None,
+        # TODO: should have prechunk argument for BridgeRetrievalDataset as well
     )
     prior_data_iter  = prior_data.tf_dataset.as_numpy_iterator()
     outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}_{'prechunk' if FLAGS.act_pred_horizon != 1 else ''}", 'train/out.tfrecord')
@@ -151,22 +152,22 @@ def main(_):
                             "observations/images0": tensor_feature(
                                 prior_batch["observations"]["image"][current_mask]
                             ),
-                            "observations/state": tensor_feature(
-                                prior_batch["observations"]["proprio"][current_mask]
-                            ),
-                            "next_observations/images0": tensor_feature(
-                                prior_batch["next_observations"]["image"][current_mask]
-                            ),
-                            "next_observations/state": tensor_feature(
-                                prior_batch["next_observations"]["proprio"][current_mask]
-                            ),
+                            # "observations/state": tensor_feature(
+                            #     prior_batch["observations"]["proprio"][current_mask]
+                            # ),
+                            # "next_observations/images0": tensor_feature(
+                            #     prior_batch["next_observations"]["image"][current_mask]
+                            # ),
+                            # "next_observations/state": tensor_feature(
+                            #     prior_batch["next_observations"]["proprio"][current_mask]
+                            # ),
                             "actions": tensor_feature(
                                 prior_batch["actions"][current_mask]
                             ),
-                            "terminals": tensor_feature(
-                                prior_batch["terminals"][current_mask]
-                            ),
-                            "truncates": tensor_feature(prior_batch["truncates"][current_mask]),
+                            # "terminals": tensor_feature(
+                            #     prior_batch["terminals"][current_mask]
+                            # ),
+                            # "truncates": tensor_feature(prior_batch["truncates"][current_mask]),
                             "image_flows": tensor_feature(
                                 prior_batch["image_flows"][current_mask]
                             ),

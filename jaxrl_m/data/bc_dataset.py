@@ -81,7 +81,7 @@ def _binarize_gripper_actions(actions):
     return new_actions
 
 
-class BridgeDataset:
+class ImgBCDataset:
     """
     Fast parallel tf.data.Dataset-based dataloader for a dataset in the
     BridgeData format. This format consists of TFRecords where each example
@@ -104,25 +104,24 @@ class BridgeDataset:
             and proprio.
         relabel_actions: Whether to relabel the actions with reached states
             (based on proprioception). Also binarizes gripper actions.
-        goal_relabeling_strategy: Goal relabeling strategy. See
-            `jaxrl_m.data.tf_goal_relabeling` for more details.
-        goal_relabeling_kwargs: Keyword arguments for goal relabeling. See
-            `jaxrl_m.data.tf_goal_relabeling` for more details.
         sample_weights: If data_paths is a list of list of paths, this is a
             list of weights with which to sample from each sub-list.
         batch_size: Batch size.
         shuffle_buffer_size: Size of the shuffle buffer. It is split between
             sub-datasets by `sample_weights`.
-        cache: Whether to cache the dataset in memory.
         train: Whether this dataset is intended for training
             (if set to `False`, will disable shuffling and augmentations).
         augment: Whether to apply image augmentations.
         augment_kwargs: Keyword arguments for image augmentations. See
             `jaxrl_m.data.tf_augmentations.augment` for more details.
-        augment_next_obs_goal_differently: Whether to use different random seeds
-            for augmenting the obs, next_obs, and goal image.
         act_pred_horizon: Number of consecutive actions that will be predicted.
         obs_horizon: Number of consecutive observations that will be conditioned on.
+        goal_relabeling_strategy: Goal relabeling strategy. See
+            `jaxrl_m.data.tf_goal_relabeling` for more details.
+        goal_relabeling_kwargs: Keyword arguments for goal relabeling. See
+            `jaxrl_m.data.tf_goal_relabeling` for more details.
+        augment_next_obs_goal_differently: Whether to use different random seeds
+            for augmenting the obs, next_obs, and goal image.
         load_langauge: Whether to look for and load language from the data.
         skip_unlabeled: Whether to filter out trajectories not labeled with language.
     """
@@ -134,19 +133,19 @@ class BridgeDataset:
         action_proprio_metadata: Optional[dict] = None,
         normalization_type: Optional[str] = "normal",
         relabel_actions: bool = True,
-        goal_relabeling_strategy: str = "uniform",
-        goal_relabeling_kwargs: dict = {},
         sample_weights: Optional[List[float]] = None,
         batch_size: int = 256,
         shuffle_buffer_size: int = 10000,
-        cache: bool = False,
         train: bool = True,
         augment: bool = False,
-        augment_next_obs_goal_differently: bool = False,
         augment_kwargs: dict = {},
         act_pred_horizon: Optional[int] = None,
         prechunk_act: bool = False,
         obs_horizon: Optional[int] = None,
+        goal_conditioned: bool = False,
+        goal_relabeling_strategy: str = "uniform",
+        goal_relabeling_kwargs: dict = {},
+        augment_goal_differently: bool = False,
         load_language: bool = False,
         skip_unlabeled: bool = False,
         **kwargs,
@@ -163,17 +162,21 @@ class BridgeDataset:
         self.relabel_actions = relabel_actions
         self.action_proprio_metadata = action_proprio_metadata
         self.normalization_type = normalization_type
-        self.goal_relabeling_strategy = goal_relabeling_strategy
-        self.goal_relabeling_kwargs = goal_relabeling_kwargs
-        self.cache = cache
         self.augment_kwargs = augment_kwargs
-        self.augment_next_obs_goal_differently = augment_next_obs_goal_differently
         self.act_pred_horizon = act_pred_horizon
         self.prechunk_act = prechunk_act
         self.obs_horizon = obs_horizon
         self.is_train = train
+        self.goal_conditioned = goal_conditioned
+        self.goal_relabeling_strategy = goal_relabeling_strategy
+        self.goal_relabeling_kwargs = goal_relabeling_kwargs
+        self.augment_goal_differently = augment_goal_differently
         self.load_language = load_language
 
+        assert not (self.prechunk_act and self.relabel_actions), "Cannot prechunk and relabel actions"
+        if self.relabel_actions:
+            self.PROTO_TYPE_SPEC["observations/state"] = tf.float32
+            self.PROTO_TYPE_SPEC["next_observations/state"] = tf.float32
         if self.load_language:
             self.PROTO_TYPE_SPEC["language"] = tf.string
         if self.act_pred_horizon is not None:
@@ -248,31 +251,25 @@ class BridgeDataset:
         dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
-        dataset = dataset.map(
-            self._process_actions, num_parallel_calls=tf.data.AUTOTUNE
-        )
+        dataset = dataset.map(self._process_actions, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
         dataset = dataset.map(self._chunk_act_obs, num_parallel_calls=tf.data.AUTOTUNE)
-
-        # cache before add_goals because add_goals introduces randomness
-        if self.cache:
-            dataset = dataset.cache()
 
         # yields trajectories
         dataset = dataset.map(self._add_goals, num_parallel_calls=tf.data.AUTOTUNE)
 
         # unbatch to yield individual transitions
-        dataset = dataset.unbatch()
+        # NOTE: unbatch is slow
+        # dataset = dataset.unbatch()
+        dataset = dataset.interleave(tf.data.Dataset.from_tensor_slices, num_parallel_calls=tf.data.AUTOTUNE)
 
         return dataset
 
     # the expected type spec for the serialized examples
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
-        "observations/state": tf.float32,
         "actions": tf.float32,
-        "terminals": tf.bool,
         "image_flows": tf.float32,
     }
 
@@ -291,11 +288,13 @@ class BridgeDataset:
         return {
             "observations": {
                 "image": parsed_tensors["observations/images0"],
-                "proprio": parsed_tensors["observations/state"],
+                **({"proprio": parsed_tensors["observations/state"]} if self.relabel_actions else {}),
+            },
+            "next_observations": {
+                **({"proprio": parsed_tensors["next_observations/state"]} if self.relabel_actions else {}),
             },
             **({"language": parsed_tensors["language"]} if self.load_language else {}),
             "actions": parsed_tensors["actions"],
-            "terminals": parsed_tensors["terminals"],
             "image_flows": parsed_tensors["image_flows"],
         }
 
@@ -319,17 +318,19 @@ class BridgeDataset:
 
         # normalize actions and proprio
         # NOTE: Not sure whether the action_proprio_meta we're using matches the relabeled actions
+        # NOTE: We binarize the gripper actions but then normalize them, which is weird
+        # NOTE: We don't use proprio for this dataset
         if self.action_proprio_metadata is not None:
             if self.normalization_type == "normal":
                 # normalize to mean 0, std 1
                 traj["actions"] = (
                     traj["actions"] - self.action_proprio_metadata["action"]["mean"]
                 ) / self.action_proprio_metadata["action"]["std"]
-                for key in ["observations", "next_observations"]:
-                    traj[key]["proprio"] = (
-                        traj[key]["proprio"]
-                        - self.action_proprio_metadata["proprio"]["mean"]
-                    ) / self.action_proprio_metadata["proprio"]["std"]
+                # if "proprio" in traj["observations"]:
+                #     traj["observations"]["proprio"] = (
+                #         traj["observations"]["proprio"]
+                #         - self.action_proprio_metadata["proprio"]["mean"]
+                #     ) / self.action_proprio_metadata["proprio"]["std"]
             elif self.normalization_type == "bounds":
                 # normalize to [0, 1]
                 traj["actions"] = (
@@ -340,15 +341,15 @@ class BridgeDataset:
                 )
                 # clip to [0, 1]
                 traj["actions"] = tf.clip_by_value(traj["actions"], 0, 1)
-                for key in ["observations", "next_observations"]:
-                    traj[key]["proprio"] = (
-                        traj[key]["proprio"]
-                        - self.action_proprio_metadata["proprio"]["min"]
-                    ) / (
-                        self.action_proprio_metadata["proprio"]["max"]
-                        - self.action_proprio_metadata["proprio"]["min"]
-                    )
-                    traj[key]["proprio"] = tf.clip_by_value(traj[key]["proprio"], 0, 1)
+                # if "proprio" in traj["observations"]:
+                #     traj["observations"]["proprio"] = (
+                #         traj[key]["proprio"]
+                #         - self.action_proprio_metadata["proprio"]["min"]
+                #     ) / (
+                #         self.action_proprio_metadata["proprio"]["max"]
+                #         - self.action_proprio_metadata["proprio"]["min"]
+                #     )
+                #     traj["observations"]["proprio"] = tf.clip_by_value(traj["observations"]["proprio"], 0, 1)
             else:
                 raise ValueError
 
@@ -376,15 +377,14 @@ class BridgeDataset:
             traj["obs_chunks"] = tf.nest.map_structure(
                 lambda x: tf.gather(x, chunk_indices), traj["observations"]
             )
-            traj["next_obs_chunks"] = tf.nest.map_structure(
-                lambda x: tf.gather(x, chunk_indices), traj["next_observations"]
-            )
         return traj
 
     def _add_goals(self, traj):
-        traj = GOAL_RELABELING_FUNCTIONS[self.goal_relabeling_strategy](
-            traj, **self.goal_relabeling_kwargs
-        )
+        if self.goal_conditioned:
+            # NOTE: GC baselines would need next_observations/images0 -> actually no, we can just use observations/images0
+            traj = GOAL_RELABELING_FUNCTIONS[self.goal_relabeling_strategy](
+                traj, **self.goal_relabeling_kwargs
+            )
 
         if self.load_language:
             lang_idx = tf.random.uniform(
@@ -401,24 +401,25 @@ class BridgeDataset:
             traj["actions"] = traj.pop("action_chunks")
         if "obs_chunks" in traj:
             traj["observations"] = traj.pop("obs_chunks")
-            traj["next_observations"] = traj.pop("next_obs_chunks")
 
         return traj
 
     def _augment(self, seed, image):
-        if self.augment_next_obs_goal_differently:
+        if self.augment_goal_differently:
             sub_seeds = tf.unstack(
                 tf.random.stateless_uniform(
-                    [3, 2], seed=[seed, seed], minval=None, maxval=None, dtype=tf.int32
+                    [2, 2], seed=[seed, seed], minval=None, maxval=None, dtype=tf.int32
                 )
             )
         else:
-            # use the same seed for obs, next_obs, and goal
-            sub_seeds = [[seed, seed]] * 3
+            # use the same seed for obs, and goal
+            sub_seeds = [[seed, seed]] * 2
 
         for key, sub_seed in zip(
-            ["observations", "next_observations", "goals"], sub_seeds
+            ["observations", "goals"], sub_seeds
         ):
+            if key not in image:
+                continue
             image[key]["image"] = augment(
                 image[key]["image"], sub_seed, **self.augment_kwargs
             )

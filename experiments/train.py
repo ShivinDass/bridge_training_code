@@ -13,7 +13,7 @@ from ml_collections import config_flags
 from jaxrl_m.agents import agents
 from jaxrl_m.common.common import shard_batch
 from jaxrl_m.common.wandb import WandBLogger
-from jaxrl_m.data.bridge_dataset import BridgeDataset, glob_to_path_list
+from jaxrl_m.data.bc_dataset import ImgBCDataset, glob_to_path_list
 from jaxrl_m.utils.timer_utils import Timer
 from jaxrl_m.vision import encoders
 from jaxrl_m.data.text_processing import text_processors
@@ -93,7 +93,7 @@ def main(_):
         if os.path.exists(val_path[0]):
             val_paths.append(val_path)
 
-    train_data = BridgeDataset(
+    train_data = ImgBCDataset(
         train_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
@@ -102,7 +102,7 @@ def main(_):
         sample_weights=FLAGS.bridgedata_config.sample_weights,
         **FLAGS.config.dataset_kwargs,
     )
-    val_data = BridgeDataset(
+    val_data = ImgBCDataset(
         val_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
