@@ -17,7 +17,7 @@ from jaxrl_m.data.tf_augmentations import random_resized_crop
 from jaxrl_m.data.tf_goal_relabeling import GOAL_RELABELING_FUNCTIONS
 
 
-class BridgeOpticalFlowVAEDataset:
+class OpticalFlowVAEDataset:
     """
     Args:
         data_paths: List of paths to the data files. If a list of list of paths
@@ -39,6 +39,8 @@ class BridgeOpticalFlowVAEDataset:
             for augmenting the obs, next_obs, and goal image.
     """
 
+    PROTO_TYPE_SPEC = {}
+
     def __init__(
         self,
         data_paths: List[Union[str, List[str]]],
@@ -49,6 +51,7 @@ class BridgeOpticalFlowVAEDataset:
         train: bool = True,
         augment: bool = False,
         augment_kwargs: dict = {},
+        dtype: str = "float32",
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
@@ -62,6 +65,12 @@ class BridgeOpticalFlowVAEDataset:
 
         self.augment_kwargs = augment_kwargs
         self.is_train = train
+        if dtype == "float32":
+            self.PROTO_TYPE_SPEC["image_flows"] = tf.float32
+        elif dtype == "float16":
+            self.PROTO_TYPE_SPEC["image_flows"] = tf.float16
+        else:
+            raise ValueError(f"Invalid dtype: {dtype}")
 
         # construct a dataset for each sub-list of paths
         datasets = []
@@ -134,12 +143,6 @@ class BridgeOpticalFlowVAEDataset:
 
         return dataset
 
-    # the expected type spec for the serialized examples
-    # NOTE: only decode the stuff we want
-    PROTO_TYPE_SPEC = {
-        "image_flows": tf.float32,
-    }
-
     def _decode_example(self, example_proto):
         # decode the example proto according to PROTO_TYPE_SPEC
         features = {
@@ -153,7 +156,7 @@ class BridgeOpticalFlowVAEDataset:
         }
         # restructure the dictionary into the downstream format
         return {
-            "image_flows": parsed_tensors["image_flows"],
+            "image_flows": tf.cast(parsed_tensors["image_flows"], tf.float32),
         }
 
     def _augment(self, seed, image):
@@ -170,3 +173,21 @@ class BridgeOpticalFlowVAEDataset:
 
     def iterator(self):
         return self.tf_dataset.prefetch(tf.data.AUTOTUNE).as_numpy_iterator()
+
+
+if __name__ == '__main__':
+    dataset = OpticalFlowVAEDataset(
+        ['/iliad/group/datasets/OXE_OCTO/small_test_h8_prechunk/train/out.tfrecord'],
+        0,
+        train=False,
+        dtype="float16"
+    )
+    it = dataset.iterator()
+
+    import ipdb
+    ipdb.set_trace()
+
+    tot = 0
+    for batch in it:
+        tot += batch['image_flows'].shape[0]
+    print(tot)

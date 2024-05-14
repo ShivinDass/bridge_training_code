@@ -81,12 +81,17 @@ ACTION_PROPRIO_METADATA = {
 
 def get_config(config_string):
     actual_dataset_map = {
-        "viper_x_pot": "viper_x_pot",
+        # "viper_x_pot": "viper_x_pot",
         "viper_x_pot_h8": "viper_x_pot_h8", # h8 means the optical flow is computed from t to t+8
+        "viper_x_pot_h8_prechunk": "viper_x_pot_h8_prechunk",
         "viper_x_microwave_h8": "viper_x_microwave_h8",
         "viper_x_microwave_good_start_pos_h8": "viper_x_microwave_good-start-pos_h8", # good-start-pos means the data collection has the same initial position as evaluation
         "bridgedata_v2": "bridge_data_v2/?*/?*/?*",
         "bridgedata_v2_h8": "bridge_data_v2_h8/?*/?*/?*",
+        # NOTE: exclude 0 because the processing is not finished
+        "oxe_subset_h8": "flow_retrieval_subset_[1-7]_h8_prechunk",
+        # NOTE: just for testing
+        "pot_microwave_vae_0.01": "pot_with-microwave-vae_bridge_data_v2_h8_0.01_prechunk",
     }
     general_dataset_map = {
         "flow_retrieved": "{}_bridge_data_v2_h8_{}_prechunk",
@@ -145,5 +150,6 @@ def get_config(config_string):
             "exclude": [],
             "sample_weights": sample_weights,
             "action_proprio_metadata": ACTION_PROPRIO_METADATA,
+            "dtype": "float16" if target_dataset == "oxe_subset_h8" else "float32"
         }
     )

@@ -13,8 +13,8 @@ from ml_collections import config_flags
 from jaxrl_m.agents import pretrain_agents
 from jaxrl_m.common.common import shard_batch
 from jaxrl_m.common.wandb import WandBLogger
-from jaxrl_m.data.bridge_dataset import glob_to_path_list
-from jaxrl_m.data.bridge_optical_flow_vae_dataset import BridgeOpticalFlowVAEDataset
+from jaxrl_m.data.bc_dataset import glob_to_path_list
+from jaxrl_m.data.optical_flow_vae_dataset import OpticalFlowVAEDataset
 from jaxrl_m.utils.timer_utils import Timer
 from jaxrl_m.vision import encoders, decoders
 from jaxrl_m.data.text_processing import text_processors
@@ -89,19 +89,21 @@ def main(_):
         for sub_list in task_paths
     ]
 
-    train_data = BridgeOpticalFlowVAEDataset(
+    train_data = OpticalFlowVAEDataset(
         train_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
         train=True,
         sample_weights=FLAGS.bridgedata_config.sample_weights,
+        dtype=FLAGS.bridgedata_config.dtype,
         **FLAGS.config.dataset_kwargs,
     )
-    val_data = BridgeOpticalFlowVAEDataset(
+    val_data = OpticalFlowVAEDataset(
         val_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
         train=False,
+        dtype=FLAGS.bridgedata_config.dtype,
         **FLAGS.config.dataset_kwargs,
     )
 
