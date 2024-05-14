@@ -1,3 +1,6 @@
 [submodule "gmflow"]
 	path = gmflow
 	url = https://github.com/lihenglin/gmflow_as_a_package.git
+[submodule "octo"]
+	path = octo
+	url = https://github.com/octo-models/octo.git

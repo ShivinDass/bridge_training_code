@@ -60,14 +60,10 @@ def _binarize_gripper_actions(actions):
 class BridgeGMFlowDataset:
     """
     Args:
-        data_paths: List of paths to the data files. If a list of list of paths
-            is provided, the data will be sampled from each sub-list according
-            to "sample_weights".
-        seed: Random seed.
-        batch_size: Batch size.
-        shuffle_buffer_size: Size of the shuffle buffer. It is split between
-            sub-datasets by `sample_weights`.
-        cache: Whether to cache the dataset in memory.
+        data_paths: List of paths to TFRecord files containing BridgeData.
+        batch_size: Number of transitions per batch.
+        relabel_actions: Whether to relabel the actions based on the reached proprio.
+        act_pred_horizon: Number of steps to chunk the actions into.
     """
 
     def __init__(
