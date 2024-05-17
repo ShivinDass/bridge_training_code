@@ -39,8 +39,6 @@ class OpticalFlowVAEDataset:
             for augmenting the obs, next_obs, and goal image.
     """
 
-    PROTO_TYPE_SPEC = {}
-
     def __init__(
         self,
         data_paths: List[Union[str, List[str]]],
@@ -55,6 +53,9 @@ class OpticalFlowVAEDataset:
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
+
+        self.PROTO_TYPE_SPEC = {}
+
         if isinstance(data_paths[0], str):
             data_paths = [data_paths]
         if sample_weights is None:
