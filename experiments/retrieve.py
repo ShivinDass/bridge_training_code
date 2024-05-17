@@ -126,8 +126,8 @@ def main(_):
 
     # find retrieved data
     retrieval_distances = -sim_scores
-    retrieval_distances[flow_scales < 1] = np.inf
-    logging.info(f"data with flow scale >= 0: {np.sum(flow_scales >= 1)}")
+    retrieval_distances = retrieval_distances.at[flow_scales < 1].set(np.inf)
+    logging.info(f"data with flow scale >= 1: {np.sum(flow_scales >= 1)}")
     sorted_distances = np.argsort(retrieval_distances)
     threshold_idx = sorted_distances[:int(FLAGS.threshold * len(sorted_distances))]
     mask = np.zeros_like(retrieval_distances, dtype=np.bool_)
