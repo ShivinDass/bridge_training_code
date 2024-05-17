@@ -76,13 +76,29 @@ class RetrievalDataset:
         batch_size: int = 256,
         act_pred_horizon: Optional[int] = None,
         include_future_obs: bool = False,
+        flow_dtype: str = "float32",
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
+        if isinstance(data_paths[0], str):
+            data_paths = [data_paths]
+
+        # the expected type spec for the serialized examples
+        self.PROTO_TYPE_SPEC = {
+            "observations/images0": tf.uint8,
+            "actions": tf.float32,
+            "image_flows": tf.float32,
+        }
 
         self.relabel_actions = relabel_actions
         self.act_pred_horizon = act_pred_horizon
         self.include_future_obs = include_future_obs
+        if flow_dtype == "float32":
+            self.PROTO_TYPE_SPEC["image_flows"] = tf.float32
+        elif flow_dtype == "float16":
+            self.PROTO_TYPE_SPEC["image_flows"] = tf.float16
+        else:
+            raise ValueError(f"Invalid dtype: {flow_dtype}")
 
         if self.relabel_actions:
             self.PROTO_TYPE_SPEC["observations/state"] = tf.float32
@@ -138,13 +154,6 @@ class RetrievalDataset:
 
         return dataset
 
-    # the expected type spec for the serialized examples
-    PROTO_TYPE_SPEC = {
-        "observations/images0": tf.uint8,
-        "actions": tf.float32,
-        "image_flows": tf.float32,
-    }
-
     def _decode_example(self, example_proto):
         # decode the example proto according to PROTO_TYPE_SPEC
         features = {
@@ -166,7 +175,7 @@ class RetrievalDataset:
                 **({"proprio": parsed_tensors["next_observations/state"]} if self.relabel_actions else {}),
             },
             "actions": parsed_tensors["actions"],
-            "image_flows": parsed_tensors["image_flows"],
+            "image_flows": tf.cast(parsed_tensors["image_flows"], tf.float32),
         }
 
     def _process_actions(self, traj):
@@ -198,7 +207,8 @@ class RetrievalDataset:
             )
             # pads by repeating the last action
             chunk_indices = tf.minimum(chunk_indices, traj_len - 1)
-            traj["action"] = tf.gather(traj["actions"], chunk_indices)
+            traj["action_chunks"] = tf.gather(traj["actions"], chunk_indices)
+            traj["actions"] = traj.pop("action_chunks")
         return traj
 
     def _add_future_obs(self, traj):
