@@ -1,3 +1,4 @@
+from absl import logging
 import ml_collections
 
 ACT_MEAN = [
@@ -86,6 +87,8 @@ def get_config(config_string):
         "viper_x_pot_h8_prechunk": "viper_x_pot_h8_prechunk",
         "viper_x_microwave_h8": "viper_x_microwave_h8",
         "viper_x_microwave_good_start_pos_h8": "viper_x_microwave_good-start-pos_h8", # good-start-pos means the data collection has the same initial position as evaluation
+        "viper_x_microwave_good_start_pos_h8_prechunk": "viper_x_microwave_good-start-pos_h8_prechunk",
+        "viper_x_microwave_good_start_pos_h8_prechunk_filtered": "viper_x_microwave_good-start-pos_h8_prechunk_filtered",
         "bridgedata_v2": "bridge_data_v2/?*/?*/?*",
         "bridgedata_v2_h8": "bridge_data_v2_h8/?*/?*/?*",
         # NOTE: exclude 0 because the processing is not finished
@@ -97,6 +100,7 @@ def get_config(config_string):
         "flow_retrieved": "{}_bridge_data_v2_h8_{}_prechunk",
         "br_retrieved": "{}_bridge_data_v2_h8_br_{}_prechunk",
         "sailor_retrieved": "{}_bridge_data_v2_h8_sailor_{}_prechunk",
+        "oxe_flow_retrieved": "{}_flow_retrieval_subset_\[1-7\]_h8_prechunk_{}_prechunk",
     }
 
     sample_weights = None
@@ -113,8 +117,10 @@ def get_config(config_string):
         include = [
             [actual_dataset_map[target_dataset]]
         ]
+        included_in_action_loss = [True]
     else:
         target_dataset, prior_dataset = dataset_config_string.split('+')
+        included_in_action_loss = [True, False]
         if actual_dataset_map.get(prior_dataset) is not None:
             include = [
                 [actual_dataset_map[target_dataset]],
@@ -130,13 +136,13 @@ def get_config(config_string):
                 task = 'microwave'
                 
 
+            assert actual_dataset_map[target_dataset].endswith("prechunk")
             found = False
             for retrieval_method in general_dataset_map.keys():
-                print(retrieval_method)
                 if prior_dataset.startswith(retrieval_method):
                     retrieval_threshold = prior_dataset.split('_')[-1]
                     include = [
-                        [f"{actual_dataset_map[target_dataset]}_prechunk"], # prechunk is required by retrieval-based methods
+                        [actual_dataset_map[target_dataset]],
                         [general_dataset_map[retrieval_method].format(task, retrieval_threshold)]
                     ]
                     found = True
@@ -150,6 +156,7 @@ def get_config(config_string):
             "exclude": [],
             "sample_weights": sample_weights,
             "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            "dtype": "float16" if target_dataset == "oxe_subset_h8" else "float32"
+            "dtype": "float16" if target_dataset == "oxe_subset_h8" else "float32",
+            "included_in_action_loss": included_in_action_loss,
         }
     )

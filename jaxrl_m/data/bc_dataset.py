@@ -8,6 +8,7 @@ Written by Kevin Black (kvablack@berkeley.edu).
 
 import fnmatch
 from typing import Iterable, List, Optional, Union
+from functools import partial
 
 import numpy as np
 import tensorflow as tf
@@ -148,6 +149,7 @@ class ImgBCDataset:
         augment_goal_differently: bool = False,
         load_language: bool = False,
         skip_unlabeled: bool = False,
+        included_in_action_loss: Optional[List[bool]] = None,
         **kwargs,
     ):
         logging.warning("Extra kwargs passed to BridgeDataset: %s", kwargs)
@@ -156,7 +158,10 @@ class ImgBCDataset:
         if sample_weights is None:
             # default to uniform distribution over sub-lists
             sample_weights = [1 / len(data_paths)] * len(data_paths)
+        if included_in_action_loss is None:
+            included_in_action_loss = [True] * len(data_paths)
         assert len(data_paths) == len(sample_weights)
+        assert len(data_paths) == len(included_in_action_loss)
         assert np.isclose(sum(sample_weights), 1.0)
 
         self.relabel_actions = relabel_actions
@@ -184,8 +189,8 @@ class ImgBCDataset:
 
         # construct a dataset for each sub-list of paths
         datasets = []
-        for sub_data_paths in data_paths:
-            datasets.append(self._construct_tf_dataset(sub_data_paths, seed))
+        for i, sub_data_paths in enumerate(data_paths):
+            datasets.append(self._construct_tf_dataset(sub_data_paths, seed, included_in_action_loss[i]))
 
         if train:
             # shuffle and repeat each sub-dataset, allocating the shuffle buffer
@@ -234,7 +239,7 @@ class ImgBCDataset:
 
         self.tf_dataset = dataset
 
-    def _construct_tf_dataset(self, paths: List[str], seed: int) -> tf.data.Dataset:
+    def _construct_tf_dataset(self, paths: List[str], seed: int, included_in_action_loss: bool) -> tf.data.Dataset:
         """
         Constructs a tf.data.Dataset from a list of paths.
         The dataset yields a dictionary of tensors for each transition.
@@ -258,6 +263,12 @@ class ImgBCDataset:
 
         # yields trajectories
         dataset = dataset.map(self._add_goals, num_parallel_calls=tf.data.AUTOTUNE)
+        
+        # yields trajectories
+        dataset = dataset.map(
+            partial(self._add_action_loss_mask, mask_value=included_in_action_loss),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
 
         # unbatch to yield individual transitions
         # NOTE: unbatch is slow
@@ -402,6 +413,11 @@ class ImgBCDataset:
         if "obs_chunks" in traj:
             traj["observations"] = traj.pop("obs_chunks")
 
+        return traj
+
+    def _add_action_loss_mask(self, traj, mask_value):
+        traj_len = len(traj["actions"])
+        traj["action_loss_mask"] = tf.broadcast_to(tf.constant([mask_value], dtype=tf.bool), [traj_len])
         return traj
 
     def _augment(self, seed, image):

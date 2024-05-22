@@ -46,6 +46,8 @@ config_flags.DEFINE_config_file(
 
 
 def main(_):
+    logging.info(f"Data config: \n{FLAGS.bridgedata_config}")
+
     devices = jax.local_devices()
     num_devices = len(devices)
     assert FLAGS.config.batch_size % num_devices == 0
@@ -100,6 +102,7 @@ def main(_):
         train=True,
         action_proprio_metadata=FLAGS.bridgedata_config.action_proprio_metadata,
         sample_weights=FLAGS.bridgedata_config.sample_weights,
+        included_in_action_loss=FLAGS.bridgedata_config.included_in_action_loss,
         **FLAGS.config.dataset_kwargs,
     )
     val_data = ImgBCDataset(

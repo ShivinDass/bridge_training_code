@@ -25,12 +25,17 @@ from jaxrl_m.networks.mlp import MLP, MLPResNet
 from jaxrl_m.vision.resnet_dec import resnetdec_configs
 
 
-def ddpm_bc_loss(noise_prediction, noise):
-    ddpm_loss = jnp.square(noise_prediction - noise).sum(-1)
+def ddpm_bc_loss(noise_prediction, noise, mask):
+    ddpm_loss = jnp.where(mask[:, None], jnp.square(noise_prediction - noise).sum(-1), 0)
+    valid_sample = mask.sum()
+    if len(noise_prediction.shape) == 3:
+        act_pred_horizon = noise_prediction.shape[1]
+    else:
+        act_pred_horizon = 1
 
     return (
-        ddpm_loss.mean(),
-        {"ddpm_loss": ddpm_loss, "ddpm_loss_mean": ddpm_loss.mean()},
+        ddpm_loss.sum() / (valid_sample * act_pred_horizon),
+        {"ddpm_loss": ddpm_loss, "ddpm_loss_mean": ddpm_loss.sum() / (valid_sample * act_pred_horizon)},
     )
 
 
@@ -72,7 +77,7 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
                 rngs={"dropout": key},
                 name="actor",
             )
-            bc_loss, info = ddpm_bc_loss(noise_pred, noise_sample)
+            bc_loss, info = ddpm_bc_loss(noise_pred, noise_sample, batch["action_loss_mask"])
 
             decoder_outputs = self.state.apply_fn(
                 {"params": params},
@@ -170,6 +175,26 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
             return action_0[0]
         else:
             return action_0
+
+    @jax.jit
+    def get_predicted_flow(self, observations):
+        x = jax.random.normal(jax.random.PRNGKey(0), (1, *self.config["action_dim"]))
+        time = jnp.broadcast_to(0, (x.shape[0], 1))
+
+        embs, _ = self.state.apply_fn(
+            {"params": self.state.params, "batch_stats": self.state.batch_stats},
+            observations,
+            x,
+            time,
+            name="actor",
+        )
+
+        decoder_outputs = self.state.apply_fn(
+            {"params": self.state.params},
+            embs,
+            name="decoder",
+        )
+        return decoder_outputs
 
     @jax.jit
     def get_debug_metrics(self, batch, seed, gripper_close_val=None):
