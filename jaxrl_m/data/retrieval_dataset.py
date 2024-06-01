@@ -72,10 +72,11 @@ class RetrievalDataset:
     def __init__(
         self,
         data_paths: List[Union[str, List[str]]],
-        relabel_actions: bool = True,
         batch_size: int = 256,
         act_pred_horizon: Optional[int] = None,
+        prechunk: bool = False,
         include_future_obs: bool = False,
+        compute_proprio_action_embedding: bool = False,
         flow_dtype: str = "float32",
         **kwargs,
     ):
@@ -90,9 +91,10 @@ class RetrievalDataset:
             "image_flows": tf.float32,
         }
 
-        self.relabel_actions = relabel_actions
         self.act_pred_horizon = act_pred_horizon
+        self.prechunk = prechunk
         self.include_future_obs = include_future_obs
+        self.compute_proprio_action_embedding = compute_proprio_action_embedding
         if flow_dtype == "float32":
             self.PROTO_TYPE_SPEC["image_flows"] = tf.float32
         elif flow_dtype == "float16":
@@ -100,7 +102,8 @@ class RetrievalDataset:
         else:
             raise ValueError(f"Invalid dtype: {flow_dtype}")
 
-        if self.relabel_actions:
+        self.need_proprio = (not self.prechunk) or self.compute_proprio_action_embedding
+        if self.need_proprio:
             self.PROTO_TYPE_SPEC["observations/state"] = tf.float32
             self.PROTO_TYPE_SPEC["next_observations/state"] = tf.float32
 
@@ -137,14 +140,20 @@ class RetrievalDataset:
         dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
-        dataset = dataset.map(self._process_actions, num_parallel_calls=tf.data.AUTOTUNE)
+        if not self.prechunk:
+            dataset = dataset.map(self._process_actions, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
-        dataset = dataset.map(self._chunk_act, num_parallel_calls=tf.data.AUTOTUNE)
+        if self.act_pred_horizon is not None and not self.prechunk:
+            dataset = dataset.map(self._chunk_act, num_parallel_calls=tf.data.AUTOTUNE)
 
         # yields trajectories
         if self.include_future_obs:
             dataset = dataset.map(self._add_future_obs, num_parallel_calls=tf.data.AUTOTUNE)
+
+        # yields trajectories
+        if self.compute_proprio_action_embedding:
+            dataset = dataset.map(self._compute_proprio_action_embedding, num_parallel_calls=tf.data.AUTOTUNE)
 
         # unbatch to yield individual transitions
         # NOTE: unbatch is slow
@@ -169,46 +178,44 @@ class RetrievalDataset:
         return {
             "observations": {
                 "image": parsed_tensors["observations/images0"],
-                **({"proprio": parsed_tensors["observations/state"]} if self.relabel_actions else {}),
+                **({"proprio": parsed_tensors["observations/state"]} if self.need_proprio else {}),
             },
             "next_observations": {
-                **({"proprio": parsed_tensors["next_observations/state"]} if self.relabel_actions else {}),
+                **({"proprio": parsed_tensors["next_observations/state"]} if self.need_proprio else {}),
             },
             "actions": parsed_tensors["actions"],
             "image_flows": tf.cast(parsed_tensors["image_flows"], tf.float32),
         }
 
     def _process_actions(self, traj):
-        if self.relabel_actions:
-            # relabel the first 6 action dims (xyz position, xyz rotation)
-            # using the reached proprio
-            movement_actions = (
-                traj["next_observations"]["proprio"][:, :6]
-                - traj["observations"]["proprio"][:, :6]
-            )
-            # binarize the gripper action
-            continuous_gripper_actions = traj["actions"][:, 6]
-            binarized_gripper_actions = _binarize_gripper_actions(
-                continuous_gripper_actions
-            )
+        # relabel the first 6 action dims (xyz position, xyz rotation)
+        # using the reached proprio
+        movement_actions = (
+            traj["next_observations"]["proprio"][:, :6]
+            - traj["observations"]["proprio"][:, :6]
+        )
+        # binarize the gripper action
+        continuous_gripper_actions = traj["actions"][:, 6]
+        binarized_gripper_actions = _binarize_gripper_actions(
+            continuous_gripper_actions
+        )
 
-            traj["actions"] = tf.concat(
-                [movement_actions, binarized_gripper_actions[:, None]], axis=1
-            )
+        traj["actions"] = tf.concat(
+            [movement_actions, binarized_gripper_actions[:, None]], axis=1
+        )
         return traj
 
     def _chunk_act(self, traj):
         traj_len = len(traj["actions"])
-        if self.act_pred_horizon is not None:
-            chunk_indices = tf.broadcast_to(
-                tf.range(self.act_pred_horizon), [traj_len, self.act_pred_horizon]
-            ) + tf.broadcast_to(
-                tf.range(traj_len)[:, None], [traj_len, self.act_pred_horizon]
-            )
-            # pads by repeating the last action
-            chunk_indices = tf.minimum(chunk_indices, traj_len - 1)
-            traj["action_chunks"] = tf.gather(traj["actions"], chunk_indices)
-            traj["actions"] = traj.pop("action_chunks")
+        chunk_indices = tf.broadcast_to(
+            tf.range(self.act_pred_horizon), [traj_len, self.act_pred_horizon]
+        ) + tf.broadcast_to(
+            tf.range(traj_len)[:, None], [traj_len, self.act_pred_horizon]
+        )
+        # pads by repeating the last action
+        chunk_indices = tf.minimum(chunk_indices, traj_len - 1)
+        traj["action_chunks"] = tf.gather(traj["actions"], chunk_indices)
+        traj["actions"] = traj.pop("action_chunks")
         return traj
 
     def _add_future_obs(self, traj):
@@ -218,6 +225,17 @@ class RetrievalDataset:
         traj["next_observations"] = {
             "image": tf.gather(traj["observations"]["image"], future_obs_indices),
         }
+        return traj
+    
+    def _compute_proprio_action_embedding(self, traj):
+        traj_len = len(traj["actions"])
+        future_obs_indices = tf.range(traj_len) + self.act_pred_horizon
+        future_obs_indices = tf.minimum(future_obs_indices, traj_len - 1)
+        future_proprio = tf.gather(traj["observations"]["proprio"], future_obs_indices)
+        traj["proprio-action_emb"] = tf.concat([
+            traj["observations"]["proprio"],
+            future_proprio[..., :3] - traj["observations"]["proprio"][..., :3]
+        ], axis=1)
         return traj
 
     def iterator(self):
