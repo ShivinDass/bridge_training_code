@@ -8,6 +8,7 @@ from absl import app, flags, logging
 from flax.training import checkpoints
 from ml_collections import config_flags
 import scipy
+import imageio
 
 from jaxrl_m.agents import pretrain_agents
 from jaxrl_m.data.bc_dataset import glob_to_path_list
@@ -55,6 +56,8 @@ def main(_):
     target_data = RetrievalDataset(
         target_paths,
         batch_size=FLAGS.config.batch_size,
+        act_pred_horizon=FLAGS.act_pred_horizon,
+        prechunk=False,
     )
     target_data_iter = target_data.iterator()
     target_batch = next(target_data_iter)
@@ -79,10 +82,8 @@ def main(_):
 
     # compute target embeddings
     target_embeddings = []
-    flow_scales = []
     while True:
         target_embeddings.append(agent.compute_embeddings(target_batch))
-        flow_scales.append(jnp.max(target_batch["image_flows"], axis=(1, 2, 3)))
 
         try:
             target_batch = next(target_data_iter)
@@ -90,8 +91,6 @@ def main(_):
             break
 
     target_embeddings = jnp.concatenate(target_embeddings, axis=0)
-    flow_scales = jnp.concatenate(flow_scales, axis=0)
-    target_embeddings = target_embeddings[flow_scales >= 1]
     logging.info(f"target size: {target_embeddings.shape[0]}")
     logging.info("Finish computing target embeddings.")
 
@@ -99,14 +98,13 @@ def main(_):
     prior_data = RetrievalDataset(
         prior_paths,
         batch_size=FLAGS.config.batch_size,
-        act_pred_horizon=FLAGS.act_pred_horizon if FLAGS.act_pred_horizon != 1 and not FLAGS.prechunk else None,
-        relabel_actions=not FLAGS.prechunk,
+        act_pred_horizon=FLAGS.act_pred_horizon,
+        prechunk=FLAGS.prechunk,
         flow_dtype=FLAGS.prior_dataset_flow_dtype,
     )
 
     prior_data_iter  = prior_data.iterator()
     sim_scores = []
-    flow_scales = []
     while True:
         try:
             prior_batch = next(prior_data_iter)
@@ -115,19 +113,15 @@ def main(_):
                 logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
             prior_embeddings = agent.compute_embeddings(prior_batch)
             sim_scores.append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings, prior_embeddings), axis=0))
-            flow_scales.append(jnp.max(prior_batch["image_flows"], axis=(1, 2, 3)))
         except StopIteration:
             break
     sim_scores = jnp.concatenate(sim_scores, axis=0)
-    flow_scales = jnp.concatenate(flow_scales, axis=0)
 
     logging.info(f"prior size: {sim_scores.shape[0]}")
     logging.info("Finish computing similarity scores.")
 
     # find retrieved data
     retrieval_distances = -sim_scores
-    retrieval_distances = retrieval_distances.at[flow_scales < 1].set(np.inf)
-    logging.info(f"data with flow scale >= 1: {np.sum(flow_scales >= 1)}")
     sorted_distances = np.argsort(retrieval_distances)
     threshold_idx = sorted_distances[:int(FLAGS.threshold * len(sorted_distances))]
     mask = np.zeros_like(retrieval_distances, dtype=np.bool_)
@@ -137,62 +131,32 @@ def main(_):
     prior_data = RetrievalDataset(
         prior_paths,
         batch_size=FLAGS.config.batch_size,
-        act_pred_horizon=FLAGS.act_pred_horizon if FLAGS.act_pred_horizon != 1 and not FLAGS.prechunk else None,
-        relabel_actions=not FLAGS.prechunk,
+        act_pred_horizon=FLAGS.act_pred_horizon,
+        prechunk=FLAGS.prechunk,
+        include_future_obs=True,
         flow_dtype=FLAGS.prior_dataset_flow_dtype,
     )
     prior_data_iter  = prior_data.iterator()
-    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}{FLAGS.prior_dataset_path.split('/')[0]}_{FLAGS.threshold}_{'prechunk' if FLAGS.act_pred_horizon != 1 else ''}", 'train/out.tfrecord')
-    tf.io.gfile.makedirs(os.path.dirname(outpath))
-    with tf.io.TFRecordWriter(outpath) as writer:
-        current_idx, logger_step = 0, 0
 
-        while True:
-            try:
-                prior_batch = next(prior_data_iter)
-                if logger_step == 0:
-                    logging.info(f"Shape of actions: {prior_batch['actions'].shape}")
-                    logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
-                current_mask = mask[current_idx:current_idx+len(prior_batch['actions'])]
-                current_idx += len(prior_batch['actions'])
-                logger_step += 1
-            except StopIteration:
-                break
+    cnt = 0
+    current_idx = 0
+    while True:
+        try:
+            prior_batch = next(prior_data_iter)
+            current_mask = mask[current_idx:current_idx+len(prior_batch['actions'])]
+            current_idx += len(prior_batch['actions'])
+        except StopIteration:
+            break
 
-            if np.sum(current_mask) != 0:
-                example = tf.train.Example(
-                    features=tf.train.Features(
-                        feature={
-                            "observations/images0": tensor_feature(
-                                prior_batch["observations"]["image"][current_mask]
-                            ),
-                            # "observations/state": tensor_feature(
-                            #     prior_batch["observations"]["proprio"][current_mask]
-                            # ),
-                            # "next_observations/images0": tensor_feature(
-                            #     prior_batch["next_observations"]["image"][current_mask]
-                            # ),
-                            # "next_observations/state": tensor_feature(
-                            #     prior_batch["next_observations"]["proprio"][current_mask]
-                            # ),
-                            "actions": tensor_feature(
-                                prior_batch["actions"][current_mask]
-                            ),
-                            # "terminals": tensor_feature(
-                            #     prior_batch["terminals"][current_mask]
-                            # ),
-                            # "truncates": tensor_feature(prior_batch["truncates"][current_mask]),
-                            "image_flows": tensor_feature(
-                                prior_batch["image_flows"][current_mask]
-                            ),
-                        }
-                    )
-                )
-                writer.write(example.SerializeToString())
+        if np.sum(current_mask) != 0:
+            for idx in np.where(current_mask)[0]:
+                imageio.imwrite(f"vis/{cnt}.png",
+                                np.concatenate((
+                                    prior_batch['observations']['image'][idx],
+                                    prior_batch['next_observations']['image'][idx],
+                                ), axis=1))
+                cnt += 1
 
-            if logger_step % 100 == 0:
-                logging.info(f"Processed {logger_step} batches.")
-
-
+    
 if __name__ == "__main__":
     app.run(main)

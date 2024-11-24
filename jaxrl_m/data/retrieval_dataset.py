@@ -220,11 +220,12 @@ class RetrievalDataset:
 
     def _add_future_obs(self, traj):
         traj_len = len(traj["actions"])
-        future_obs_indices = tf.range(traj_len) + self.act_pred_horizon
-        future_obs_indices = tf.minimum(future_obs_indices, traj_len - 1)
-        traj["next_observations"] = {
-            "image": tf.gather(traj["observations"]["image"], future_obs_indices),
-        }
+        for i in range(1, self.act_pred_horizon+1):
+            future_obs_indices = tf.range(traj_len) + i
+            future_obs_indices = tf.minimum(future_obs_indices, traj_len - 1)
+            traj[f"next_observations_{i}"] = {
+                "image": tf.gather(traj["observations"]["image"], future_obs_indices),
+            }
         return traj
     
     def _compute_proprio_action_embedding(self, traj):

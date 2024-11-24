@@ -181,8 +181,7 @@ class WrappedBCAgent(flax.struct.PyTreeNode):
 
         rng, init_rng = jax.random.split(rng)
         # NOTE: use a fixed emb size 512 for now
-        # params = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])["params"]
-        params_and_batch_stats = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512))])
+        params_and_batch_stats = model_def.init(init_rng, actor=[observations], decoder=[jnp.ones((1, 512 * 2))])
         params = params_and_batch_stats["params"]
         batch_stats = params_and_batch_stats["batch_stats"]
 

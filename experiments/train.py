@@ -129,7 +129,7 @@ def main(_):
         return batch
 
     train_data_iter = map(
-        shard_fn, map(process_text, train_data.tf_dataset.as_numpy_iterator())
+        shard_fn, map(process_text, train_data.iterator())
     )
 
     example_batch = next(train_data_iter)

@@ -120,7 +120,7 @@ def get_config(config_string):
         included_in_action_loss = [True]
     else:
         target_dataset, prior_dataset = dataset_config_string.split('+')
-        included_in_action_loss = [True, False]
+        included_in_action_loss = [True, True]
         if actual_dataset_map.get(prior_dataset) is not None:
             include = [
                 [actual_dataset_map[target_dataset]],

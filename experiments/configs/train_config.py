@@ -19,7 +19,7 @@ def get_config(config_string):
     base_data_config = dict(
         shuffle_buffer_size=25000,
         augment=True,
-        augment_next_obs_goal_differently=False,
+        augment_goal_differently=False,
         augment_kwargs=dict(
             random_resized_crop=dict(scale=[0.8, 1.0], ratio=[0.9, 1.1]),
             random_brightness=[0.2],
@@ -37,104 +37,6 @@ def get_config(config_string):
     )
 
     possible_structures = {
-        "gc_iql": ConfigDict(
-            dict(
-                agent="gc_iql",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        state_dependent_std=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                    ),
-                    learning_rate=3e-4,
-                    discount=0.98,
-                    expectile=0.7,
-                    temperature=1.0,
-                    target_update_rate=0.002,
-                    shared_encoder=True,
-                    early_goal_concat=True,
-                    shared_goal_encoder=True,
-                    use_proprio=False,
-                    negative_proportion=0.1,
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.1),
-                    relabel_actions=True,
-                    **base_data_config,
-                ),
-                encoder="resnetv1-34-bridge",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                ),
-                **base_real_config,
-            )
-        ),
-        "gc_bc": ConfigDict(
-            dict(
-                agent="gc_bc",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
-                    ),
-                    early_goal_concat=True,
-                    shared_goal_encoder=True,
-                    use_proprio=False,
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    decay_steps=int(2e6),
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    **base_data_config,
-                ),
-                encoder="resnetv1-34-bridge",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                ),
-                **base_real_config,
-            )
-        ),
-        "lc_bc": ConfigDict(
-            dict(
-                agent="lc_bc",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
-                    ),
-                    early_goal_concat=True,
-                    shared_goal_encoder=True,
-                    use_proprio=False,
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    decay_steps=int(2e6),
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    load_language=True,
-                    skip_unlabeled=True,
-                    **base_data_config,
-                ),
-                text_processor="muse_embedding",
-                text_processor_kwargs=dict(),
-                encoder="resnetv1-34-bridge-film",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                ),
-                **base_real_config,
-            )
-        ),
         "gc_ddpm_bc": ConfigDict(
             dict(
                 agent="gc_ddpm_bc",
@@ -172,141 +74,7 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        "contrastive_rl_td": ConfigDict(
-            dict(
-                agent="stable_contrastive_rl",
-                agent_kwargs=dict(
-                    critic_network_kwargs=dict(
-                        hidden_dims=(256, 256, 256), use_layer_norm=True
-                    ),
-                    critic_kwargs=dict(init_final=1e-12, repr_dim=16, twin_q=True),
-                    policy_network_kwargs=dict(
-                        hidden_dims=(256, 256, 256), dropout_rate=0.1
-                    ),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        state_dependent_std=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                    ),
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    actor_decay_steps=int(2e6),
-                    use_td=True,
-                    gcbc_coef=0.20,
-                    discount=0.98,
-                    temperature=1.0,
-                    target_update_rate=0.002,
-                    shared_encoder=False,
-                    early_goal_concat=False,
-                    shared_goal_encoder=True,
-                    use_proprio=False,
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    **base_data_config,
-                ),
-                encoder="resnetv1-34-bridge",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=False, act="swish"
-                ),
-                **base_real_config,
-            )
-        ),
-        "bc": ConfigDict(
-            dict(
-                agent="bc",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
-                    ),
-                    use_proprio=False,
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    decay_steps=int(2e6),
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    **base_data_config,
-                ),
-                encoder="resnetv1-34-bridge",
-                encoder_kwargs=dict(
-                    pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                ),
-                **base_real_config,
-            )
-        ),
-        "flow_bc_pretrained": ConfigDict(
-            dict(
-                agent="flow_bc",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
-                    ),
-                    use_proprio=False,
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    decay_steps=int(2e6),
-                    recon_loss_lambda=0.01,
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    **base_data_config,
-                ),
-                # encoder="resnetv1-34-bridge",
-                # encoder_kwargs=dict(
-                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                # ),
-                encoder="pretrained_resnet34",
-                encoder_kwargs=dict(),
-                **base_real_config,
-            )
-        ),
-        "flow_bc_pretrained_no2": ConfigDict(
-            dict(
-                agent="flow_bc",
-                agent_kwargs=dict(
-                    network_kwargs=dict(hidden_dims=(256, 256, 256), dropout_rate=0.1),
-                    policy_kwargs=dict(
-                        tanh_squash_distribution=False,
-                        fixed_std=[1, 1, 1, 1, 1, 1, 1],
-                        state_dependent_std=False,
-                    ),
-                    use_proprio=False,
-                    learning_rate=3e-4,
-                    warmup_steps=2000,
-                    decay_steps=int(2e6),
-                    recon_loss_lambda=0.01,
-                ),
-                dataset_kwargs=dict(
-                    goal_relabeling_strategy="uniform",
-                    goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
-                    # NOTE: try using more history to prevent multi-modality and mode collapse
-                    obs_horizon=2,
-                    **base_data_config,
-                ),
-                # encoder="resnetv1-34-bridge",
-                # encoder_kwargs=dict(
-                #     pooling_method="avg", add_spatial_coordinates=True, act="swish"
-                # ),
-                encoder="pretrained_resnet34",
-                encoder_kwargs=dict(),
-                **base_real_config,
-            )
-        ),
-        "flow_ddpm_bc_pretrained-freezed-BN": ConfigDict(
+        "flow_ddpm_bc_pretrained-freezed-BN_na8_prechunk": ConfigDict(
             dict(
                 agent="flow_ddpm_bc",
                 agent_kwargs=dict(
@@ -330,9 +98,10 @@ def get_config(config_string):
                 dataset_kwargs=dict(
                     goal_relabeling_strategy="uniform",
                     goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    relabel_actions=True,
+                    relabel_actions=False, # Don't use the observations to relabel the actions since we already prechunk the actions
                     obs_horizon=1,
-                    act_pred_horizon=1,
+                    act_pred_horizon=8,
+                    prechunk_act=True,
                     **base_data_config,
                 ),
                 encoder="pretrained_resnet34",
@@ -409,7 +178,7 @@ def get_config(config_string):
                 **base_real_config,
             )
         ),
-        "flow_ddpm_bc_pretrained-freezed-BN_na8": ConfigDict(
+        "ddpm_bc_pretrained-freezed-BN_na8_prechunk": ConfigDict(
             dict(
                 agent="flow_ddpm_bc",
                 agent_kwargs=dict(
@@ -428,13 +197,12 @@ def get_config(config_string):
                     learning_rate=3e-4,
                     warmup_steps=2000,
                     decay_steps=int(2e6),
-                    recon_loss_lambda=0.01,
+                    recon_loss_lambda=0,
                 ),
                 dataset_kwargs=dict(
                     goal_relabeling_strategy="uniform",
                     goal_relabeling_kwargs=dict(reached_proportion=0.0),
-                    # relabel_actions=True,
-                    relabel_actions=False, # Don't use the observations to relabel the actions since we already prechunk the actions
+                    relabel_actions=False,
                     obs_horizon=1,
                     act_pred_horizon=8,
                     prechunk_act=True,
