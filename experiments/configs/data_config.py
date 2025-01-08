@@ -93,6 +93,8 @@ def get_config(config_string):
         "bridgedata_v2_h8": "bridge_data_v2_h8/?*/?*/?*",
         # NOTE: exclude 0 because the processing is not finished
         "oxe_subset_h8": "flow_retrieval_subset_[1-7]_h8_prechunk",
+        "oxe_broth": "oxe_flow_h4_prechunk",
+        "oxe_magic_soup_subset_h8": "oxe_magic_soup_s?_h8_prechunk",
         # NOTE: just for testing
         "pot_microwave_vae_0.01": "pot_with-microwave-vae_bridge_data_v2_h8_0.01_prechunk",
     }
@@ -156,7 +158,7 @@ def get_config(config_string):
             "exclude": [],
             "sample_weights": sample_weights,
             "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            "dtype": "float16" if target_dataset == "oxe_subset_h8" else "float32",
+            "dtype": "float16", #if target_dataset == "oxe_broth" else "float32",
             "included_in_action_loss": included_in_action_loss,
         }
     )

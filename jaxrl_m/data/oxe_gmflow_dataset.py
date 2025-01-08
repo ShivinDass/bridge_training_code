@@ -7,8 +7,9 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
+from jaxrl_m.data.oxe_dataset_utils import custom2_make_dataset_from_rlds, normalize_action_and_proprio
 from octo.data.oxe import make_oxe_dataset_kwargs_and_weights
-from octo.data.utils.data_utils import allocate_threads
+from octo.data.utils.data_utils import allocate_threads, tree_map, NormalizationType
 from octo.utils.spec import ModuleSpec
 
 
@@ -22,6 +23,8 @@ def custom_make_dataset_from_rlds(
     filter_functions: Sequence[ModuleSpec] = (),
     num_parallel_reads: int = tf.data.AUTOTUNE,
     num_parallel_calls: int = tf.data.AUTOTUNE,
+    dataset_statistics: Optional[dict] = None,
+    action_proprio_normalization_type: NormalizationType = NormalizationType.NORMAL,
     **kwargs,
 ) -> dl.DLataset:
     """This function is responsible for loading a specific RLDS dataset from storage and getting it into a
@@ -90,6 +93,8 @@ def custom_make_dataset_from_rlds(
 
     builder = tfds.builder(name, data_dir=data_dir)
 
+    dataset_statistics = tree_map(np.array, dataset_statistics)
+
     # construct the dataset
     if "val" not in builder.info.splits:
         split = "train[:95%]" if train else "train[95%:]"
@@ -102,6 +107,14 @@ def custom_make_dataset_from_rlds(
     for filter_fcn_spec in filter_functions:
         dataset = dataset.filter(ModuleSpec.instantiate(filter_fcn_spec))
     dataset = dataset.traj_map(restructure, num_parallel_calls)
+    dataset = dataset.traj_map(
+        partial(
+            normalize_action_and_proprio,
+            metadata=dataset_statistics,
+            normalization_type=action_proprio_normalization_type,
+        ),
+        num_parallel_calls,
+    )
 
     return dataset
 
@@ -255,11 +268,19 @@ class OXEGMFlowDataset:
             load_proprio=False,
             load_language=False,
         )
+
         real_dataset_kwargs_list = []
         for dataset_kwargs in dataset_kwargs_list:
             if dataset_kwargs["image_obs_keys"]["primary"] is None:
                 continue
             real_dataset_kwargs_list.append(dataset_kwargs)
+        
+        dataset_sizes = []
+        all_dataset_statistics = []
+        for dataset_kwargs in dataset_kwargs_list:
+            _, dataset_statistics = custom2_make_dataset_from_rlds(**dataset_kwargs, train=train)
+            dataset_sizes.append(dataset_statistics["num_transitions"])
+            all_dataset_statistics.append(dataset_statistics)
 
         # allocate threads based on weights
         threads_per_dataset = allocate_threads(traj_transform_threads, np.array([1.0] * len(real_dataset_kwargs_list)))
@@ -270,8 +291,9 @@ class OXEGMFlowDataset:
 
         # construct datasets
         datasets = []
-        for dataset_kwargs, threads, reads in zip(
+        for dataset_kwargs, dataset_statistics, threads, reads in zip(
             real_dataset_kwargs_list,
+            all_dataset_statistics,
             threads_per_dataset,
             reads_per_dataset,
         ):
@@ -280,6 +302,7 @@ class OXEGMFlowDataset:
                 train=train,
                 num_parallel_calls=threads,
                 num_parallel_reads=reads,
+                dataset_statistics=dataset_statistics,
             )
             dataset = custom_apply_trajectory_transforms(
                 dataset,
@@ -310,18 +333,3 @@ class OXEGMFlowDataset:
 
     def iterator(self):
         return self.dlimp_dataset.iterator()
-
-
-if __name__ == "__main__":
-    dataset = OXEGMFlowDataset(
-        data_mix="oxe_magic_soup",
-        data_dir="/iliad/group/datasets/OXE_OCTO",
-        train=True,
-        batch_size=256,
-        traj_transform_threads=24,
-        traj_read_threads=24,
-        frame_transforms_threads=8,
-        act_pred_horizon=8,
-    )
-    import ipdb
-    ipdb.set_trace()

@@ -8,6 +8,7 @@ from .continuous.stable_contrastive_rl import StableContrastiveRLAgent
 from .continuous.wrapped_bc import WrappedBCAgent
 from .continuous.wrapped_ddpm_bc import WrappedDDPMBCAgent
 from .pretrain.optical_flow_vae import OpticalFlowVAEAgent
+from .pretrain.image_action_vae import ImageActionVAEAgent
 
 agents = {
     "gc_bc": GCBCAgent,
@@ -23,4 +24,5 @@ agents = {
 
 pretrain_agents = {
     "optical_flow_vae": OpticalFlowVAEAgent, 
+    "br_vae": ImageActionVAEAgent,
 }

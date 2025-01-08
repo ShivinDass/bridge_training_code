@@ -9,7 +9,7 @@ import tqdm
 from absl import app, flags, logging
 from flax.training import checkpoints
 from ml_collections import config_flags
-
+import wandb
 from jaxrl_m.agents import pretrain_agents
 from jaxrl_m.common.common import shard_batch
 from jaxrl_m.common.wandb import WandBLogger
@@ -18,7 +18,7 @@ from jaxrl_m.data.optical_flow_vae_dataset import OpticalFlowVAEDataset
 from jaxrl_m.utils.timer_utils import Timer
 from jaxrl_m.vision import encoders, decoders
 from jaxrl_m.data.text_processing import text_processors
-
+from tqdm import tqdm
 try:
     from jax_smi import initialise_tracking  # type: ignore
 
@@ -39,12 +39,19 @@ config_flags.DEFINE_config_file(
 )
 
 config_flags.DEFINE_config_file(
-    "bridgedata_config",
+    "data_config",
     None,
-    "File path to the bridgedata configuration.",
+    "File path to the data configuration.",
     lock_config=False,
 )
 
+
+def normalize_image_list(image):
+    image_min = image.min(axis=(1, 2, 3), keepdims=True)
+    image_max = image.max(axis=(1, 2, 3), keepdims=True)
+    image = (image - image_min)/(image_max - image_min)
+
+    return image
 
 def main(_):
     devices = jax.local_devices()
@@ -60,7 +67,7 @@ def main(_):
 
     # set up wandb and logging
     wandb_config = WandBLogger.get_default_config()
-    wandb_config.update({"project": "bridge_vae", "exp_descriptor": FLAGS.name})
+    wandb_config.update({"project": "baselines_oxe", "exp_descriptor": FLAGS.name})
     wandb_logger = WandBLogger(
         wandb_config=wandb_config, variant=FLAGS.config.to_dict(), debug=FLAGS.debug
     )
@@ -72,12 +79,12 @@ def main(_):
     )
 
     # load datasets
-    assert type(FLAGS.bridgedata_config.include[0]) == list
+    assert type(FLAGS.data_config.include[0]) == list
     task_paths = [
         glob_to_path_list(
-            path, prefix=FLAGS.config.data_path, exclude=FLAGS.bridgedata_config.exclude
+            path, prefix=FLAGS.config.data_path, exclude=FLAGS.data_config.exclude
         )
-        for path in FLAGS.bridgedata_config.include
+        for path in FLAGS.data_config.include
     ]
 
     train_paths = [
@@ -89,13 +96,16 @@ def main(_):
         for sub_list in task_paths
     ]
 
+    train_paths[0].append('/home/shivin/foundation_models/data/baselines/vae_training_data/oxe_magic_soup_s3_h8_prechunk/train/out.tfrecord')
+    val_paths[0].append('/home/shivin/foundation_models/data/baselines/vae_training_data/oxe_magic_soup_s3_h8_prechunk/val/out.tfrecord')
+
     train_data = OpticalFlowVAEDataset(
         train_paths,
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
         train=True,
-        sample_weights=FLAGS.bridgedata_config.sample_weights,
-        dtype=FLAGS.bridgedata_config.dtype,
+        sample_weights=FLAGS.data_config.sample_weights,
+        dtype=FLAGS.data_config.dtype,
         **FLAGS.config.dataset_kwargs,
     )
     val_data = OpticalFlowVAEDataset(
@@ -103,7 +113,7 @@ def main(_):
         FLAGS.config.seed,
         batch_size=FLAGS.config.batch_size,
         train=False,
-        dtype=FLAGS.bridgedata_config.dtype,
+        dtype=FLAGS.data_config.dtype,
         **FLAGS.config.dataset_kwargs,
     )
 
@@ -117,6 +127,7 @@ def main(_):
     logging.info(
         f"Batch size per device: {example_batch['image_flows'].shape[0] // num_devices}"
     )
+    print("Example batch shape: ", example_batch['image_flows'].shape)
 
     # define encoder
     encoder_def = encoders[FLAGS.config.encoder](**FLAGS.config.encoder_kwargs)
@@ -142,7 +153,7 @@ def main(_):
 
     timer = Timer()
     # for i in tqdm.tqdm(range(int(FLAGS.config.num_steps))):
-    for i in range(int(FLAGS.config.num_steps)):
+    for i in tqdm(range(int(FLAGS.config.num_steps))):
         timer.tick("total")
 
         timer.tick("dataset")
@@ -152,6 +163,24 @@ def main(_):
         timer.tick("train")
         agent, update_info = agent.update(batch)
         timer.tock("train")
+
+        if (i + 1) % 5000 == 0:
+            logging.info("Visualizing reconstructions...")
+            rng, val_rng = jax.random.split(rng)
+            recon_images = agent.visualize_reconstruction(batch, seed=val_rng)
+
+            original_images = normalize_image_list(tf.cast(batch["image_flows"][:10], tf.float32).numpy())
+            second_channel = np.zeros_like(original_images[..., 0:1])
+            original_images = np.concatenate([original_images, second_channel], axis=-1)
+            original_images = np.concatenate(original_images, axis=1)
+
+            recon_images = normalize_image_list(tf.cast(recon_images[:10], tf.float32).numpy())
+            second_channel = np.zeros_like(recon_images[..., 0:1])
+            recon_images = np.concatenate([recon_images, second_channel], axis=-1)
+            recon_images = np.concatenate(recon_images, axis=1)
+
+            images = np.concatenate([original_images, recon_images], axis=0)
+            wandb_logger.log({"reconstructions": wandb.Image(images)}, step=i)
 
         if (i + 1) % FLAGS.config.eval_interval == 0:
             logging.info("Evaluating...")
