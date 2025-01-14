@@ -18,7 +18,7 @@ from octo.data.oxe.oxe_standardization_transforms import custom_dataset_transfor
 default_config = {
     'name': None, 
     'data_dir': None, 
-    'image_obs_keys': {"primary": "image", "wrist": "wrist_image"}, 
+    'image_obs_keys': {"primary": "image", "wrist": None}, # wrist_image 
     'state_obs_keys': ["state"], 
     'language_key': 'language_instruction', 
     'absolute_action_mask': [False, False, False, False, False, False, True], 

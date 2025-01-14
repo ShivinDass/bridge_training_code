@@ -95,7 +95,7 @@ def visualize_data(dataset_name, retrieval_method):
     wandb.finish()
 
 if __name__=='__main__':
-    dataset_name = 'easy_pick_dataset_n10_h8_prechunk_th0.005'
+    dataset_name = 'simpler_carrot_dataset_h8_prechunk_th0.05'
     retrieval_methods = ['flow', 'br', 'action']
     for retrieval_method in retrieval_methods:
         visualize_data(dataset_name, retrieval_method)

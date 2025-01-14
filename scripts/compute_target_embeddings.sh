@@ -1,5 +1,5 @@
 DATA_DIR=/home/shivin/tensorflow_datasets
-DATA_NAME=easy_pick_dataset_n10
+DATA_NAME=simpler_carrot_dataset
 # DATA_NAME=oxe_magic_soup_s1
 
 OUT_DIR=/mnt/hdd1/baselines/target_data

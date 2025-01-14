@@ -1,8 +1,8 @@
-TARGET_DATASET_PATH=/mnt/hdd1/baselines/target_data/easy_pick_dataset_n10_h8_prechunk
+TARGET_DATASET_PATH=/mnt/hdd1/baselines/target_data/simpler_carrot_dataset_h8_prechunk
 PRIOR_DATASET_PATH=/mnt/hdd1/baselines/embed_data
 
 OUTPUT_DIR=/mnt/hdd1/baselines/retrieved_data
-THRESHOLD=0.005
+THRESHOLD=0.9
 
 python experiments/retrieve_oxe.py \
 --target_dataset_path $TARGET_DATASET_PATH \
