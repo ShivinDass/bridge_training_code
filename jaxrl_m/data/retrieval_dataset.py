@@ -184,7 +184,7 @@ class RetrievalDataset:
                 **({"proprio": parsed_tensors["next_observations/state"]} if self.need_proprio else {}),
             },
             "actions": parsed_tensors["actions"],
-            "image_flows": tf.cast(parsed_tensors["image_flows"], tf.float32),
+            "image_flows": tf.cast(parsed_tensors["image_flows"], tf.float16),
         }
 
     def _process_actions(self, traj):

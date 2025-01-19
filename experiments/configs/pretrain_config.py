@@ -8,8 +8,8 @@ def get_config(config_string):
         log_interval=500,
         eval_interval=5000,
         save_interval=25000,
-        save_dir="/iliad/u/lhlin/bridge_data_v2/experiment_logs",
-        data_path="/iliad/u/lhlin/bridge_data_v2/datasets_tfrecord_flow",
+        save_dir="",
+        data_path="/mnt/hdd1",
         resume_path=None,
         seed=42,
     )

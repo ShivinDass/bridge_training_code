@@ -79,16 +79,16 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
             )
             bc_loss, info = ddpm_bc_loss(noise_pred, noise_sample, batch["action_loss_mask"])
 
-            decoder_outputs = self.state.apply_fn(
-                {"params": params},
-                embs,
-                name="decoder",
-            )
-            recon_loss = ((decoder_outputs - batch["image_flows"]) ** 2).mean()
-            info["recon_loss"] = recon_loss
+            # decoder_outputs = self.state.apply_fn(
+            #     {"params": params},
+            #     embs,
+            #     name="decoder",
+            # )
+            # recon_loss = ((decoder_outputs - batch["image_flows"]) ** 2).mean()
+            # info["recon_loss"] = recon_loss
 
             return (
-                bc_loss + self.config["recon_loss_lambda"] * recon_loss,
+                bc_loss,# + self.config["recon_loss_lambda"] * recon_loss,
                 info,
             )
 
@@ -241,7 +241,7 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
             encoder=encoder_def, use_proprio=use_proprio, stop_gradient=False
         )
 
-        decoder_def = resnetdec_configs["resnet-18-dec"](num_output_channels=2, output_hw=128) 
+        decoder_def = resnetdec_configs["resnet-18-dec"](num_output_channels=2, output_hw=128) #
 
         networks = {
             "actor": WrappedScoreActor(
@@ -260,7 +260,7 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
                     use_layer_norm=score_network_kwargs["use_layer_norm"],
                 ),
             ),
-            "decoder": decoder_def
+            "decoder": decoder_def #
         }
 
         model_def = ModuleDict(networks)
@@ -271,7 +271,7 @@ class WrappedDDPMBCAgent(flax.struct.PyTreeNode):
         else:
             example_time = jnp.zeros((1,))
         params_and_batch_stats = model_def.init(
-            init_rng, actor=[observations, actions, example_time], decoder=[jnp.ones((1, 512))]
+            init_rng, actor=[observations, actions, example_time], decoder=[jnp.ones((1, 512))] #
         )
         params = params_and_batch_stats["params"]
         batch_stats = params_and_batch_stats["batch_stats"]

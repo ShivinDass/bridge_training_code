@@ -61,7 +61,7 @@ def main(_):
 
     # set up wandb and logging
     wandb_config = WandBLogger.get_default_config()
-    wandb_config.update({"project": "jaxrl_m_bridgedata", "exp_descriptor": FLAGS.name})
+    wandb_config.update({"project": "baselines_oxe", "exp_descriptor": FLAGS.name})
     wandb_logger = WandBLogger(
         wandb_config=wandb_config, variant=FLAGS.config.to_dict(), debug=FLAGS.debug
     )
@@ -171,8 +171,7 @@ def main(_):
     agent = jax.device_put(jax.tree_map(jnp.array, agent), sharding.replicate())
 
     timer = Timer()
-    # for i in tqdm.tqdm(range(int(FLAGS.config.num_steps))):
-    for i in range(int(FLAGS.config.num_steps)):
+    for i in tqdm.tqdm(range(int(FLAGS.config.num_steps))):
         timer.tick("total")
 
         timer.tick("dataset")

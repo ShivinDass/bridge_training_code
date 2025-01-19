@@ -1,16 +1,16 @@
 from ml_collections import ConfigDict
 
-
+NUM_STEPS = 200000
 def get_config(config_string):
     base_real_config = dict(
         batch_size=256,
         # num_steps=int(2e6),
-        num_steps=300000,
+        num_steps=NUM_STEPS,
         log_interval=100,
-        eval_interval=5000,
-        save_interval=5000,
-        save_dir="/iliad/u/lhlin/bridge_data_v2/experiment_logs",
-        data_path="/iliad/u/lhlin/bridge_data_v2/datasets_tfrecord_flow",
+        eval_interval=NUM_STEPS//10,
+        save_interval=NUM_STEPS//10,
+        save_dir="/home/shivin/foundation_models/experiments/baselines_oxe",
+        data_path="/mnt/hdd1",
         # data_path="/tmp/bridgedata_v2/tf_flow", # for iliad 5, 6
         resume_path=None,
         seed=42,
@@ -196,7 +196,7 @@ def get_config(config_string):
                     repeat_last_step=0,
                     learning_rate=3e-4,
                     warmup_steps=2000,
-                    decay_steps=int(2e6),
+                    decay_steps=int(NUM_STEPS)-2000,
                     recon_loss_lambda=0,
                 ),
                 dataset_kwargs=dict(

@@ -164,6 +164,7 @@ wandb
 checkpoints
 log
 render
+pretrained_resnet
 *.png
 
 *.sif

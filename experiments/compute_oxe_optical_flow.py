@@ -11,6 +11,7 @@ from flax.training import checkpoints
 from ml_collections import config_flags
 import torch
 import torch.nn.functional as F
+import tqdm
 
 from jaxrl_m.data.bc_dataset import glob_to_path_list
 from jaxrl_m.data.oxe_gmflow_dataset import OXEGMFlowDataset
@@ -42,6 +43,7 @@ def tensor_feature(value):
 
 def create_optical_flow_tfrecord(model, device, inference_size, outpath, iter):
     tf.io.gfile.makedirs(os.path.dirname(outpath))
+    pbar = tqdm.tqdm(total=None)
     with tf.io.TFRecordWriter(outpath) as writer:
         while True:
             try:
@@ -81,7 +83,7 @@ def create_optical_flow_tfrecord(model, device, inference_size, outpath, iter):
                     )
                 )
                 writer.write(example.SerializeToString())
-
+                pbar.update(1)
             except StopIteration:
                 break
 
@@ -130,11 +132,11 @@ def main(_):
     weights = checkpoint['model'] if 'model' in checkpoint else checkpoint
     model.load_state_dict(weights)
     model.eval()
-    inference_size = [480, 480] # Use larger inference size for better quality
+    inference_size = [256, 256] # Use larger inference size for better quality
 
-    train_outpath = os.path.join(FLAGS.data_dir, f"{FLAGS.out_dir_prefix}_h{FLAGS.horizon}_prechunk", "train/out.tfrecord")
+    train_outpath = os.path.join(f"{FLAGS.out_dir_prefix}_h{FLAGS.horizon}_prechunk", "train/out.tfrecord")
     create_optical_flow_tfrecord(model, device, inference_size, train_outpath, train_data_iter)
-    val_outpath = os.path.join(FLAGS.data_dir, f"{FLAGS.out_dir_prefix}_h{FLAGS.horizon}_prechunk", "val/out.tfrecord")
+    val_outpath = os.path.join(f"{FLAGS.out_dir_prefix}_h{FLAGS.horizon}_prechunk", "val/out.tfrecord")
     create_optical_flow_tfrecord(model, device, inference_size, val_outpath, val_data_iter)
 
 

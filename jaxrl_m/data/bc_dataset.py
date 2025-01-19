@@ -281,7 +281,7 @@ class ImgBCDataset:
     PROTO_TYPE_SPEC = {
         "observations/images0": tf.uint8,
         "actions": tf.float32,
-        "image_flows": tf.float32,
+        "image_flows": tf.float16,
     }
 
     def _decode_example(self, example_proto):

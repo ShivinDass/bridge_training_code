@@ -1,5 +1,6 @@
 from absl import logging
 import ml_collections
+import numpy as np
 
 ACT_MEAN = [
     ###### Bridge default #####
@@ -11,14 +12,25 @@ ACT_MEAN = [
     # 2.7425270e-04,
     # 5.9716219e-01,
 
+    # OXE BRIDGE
+    0.0002175865665776655,
+    0.0001250836212420836,
+    -0.00017108427709899843,
+    -0.0001617107045603916,
+    -0.00025248367455787957,
+    0.00025157828349620104,
+    0.5879484415054321
+
+
+
     ##### Viper_x_pot #####
-    0.00227883,
-    0.00154444,
-    -0.00229705,
-    -0.0013669,
-    -0.00198731,
-    0.00193355,
-    0.65677481
+#     0.00227883,
+#     0.00154444,
+#     -0.00229705,
+#     -0.0013669,
+#     -0.00198731,
+#     0.00193355,
+#     0.65677481
 ]
 
 ACT_STD = [
@@ -31,14 +43,24 @@ ACT_STD = [
     # 0.07807977,
     # 0.48710242,
 
+    # OXE BRIDGE
+    0.009632394649088383,
+    0.013500603847205639,
+    0.012510581873357296,
+    0.028145156800746918,
+    0.03028241917490959,
+    0.07585560530424118,
+    0.48771771788597107
+
+
     ##### Viper_x_pot #####
-    0.00990546,
-    0.01049463,
-    0.01018103,
-    0.00905978,
-    0.01723201,
-    0.01993144,
-    0.47299017
+    # 0.00990546,
+    # 0.01049463,
+    # 0.01018103,
+    # 0.00905978,
+    # 0.01723201,
+    # 0.01993144,
+    # 0.47299017
 ]
 
 # NOTE: we would not use proprioception anyways
@@ -72,8 +94,8 @@ ACTION_PROPRIO_METADATA = {
     },
     # TODO compute these
     "proprio": {
-        "mean": PROPRIO_MEAN,
-        "std": PROPRIO_STD,
+        "mean": np.zeros_like(PROPRIO_MEAN),
+        "std": np.zeros_like(PROPRIO_STD),
         # "min": ACT_MEAN,
         # "max": ACT_STD
     },
@@ -95,6 +117,9 @@ def get_config(config_string):
         "oxe_subset_h8": "flow_retrieval_subset_[1-7]_h8_prechunk",
         # NOTE: just for testing
         "pot_microwave_vae_0.01": "pot_with-microwave-vae_bridge_data_v2_h8_0.01_prechunk",
+
+        "simpler_carrot": "simpler_carrot_flow_h8_prechunk",
+        "bridge_carrot_retrieved": "retrieved_simpler_carrot/retrieved_simpler_carrot_flow_retrieved_0.01_prechunk"
     }
     general_dataset_map = {
         "flow_retrieved": "{}_bridge_data_v2_h8_{}_prechunk",
@@ -156,7 +181,7 @@ def get_config(config_string):
             "exclude": [],
             "sample_weights": sample_weights,
             "action_proprio_metadata": ACTION_PROPRIO_METADATA,
-            "dtype": "float16" if target_dataset == "oxe_subset_h8" else "float32",
+            "dtype": "float16",# if target_dataset == "oxe_subset_h8" else "float32",
             "included_in_action_loss": included_in_action_loss,
         }
     )

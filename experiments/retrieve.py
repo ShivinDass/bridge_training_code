@@ -9,6 +9,7 @@ from flax.training import checkpoints
 from ml_collections import config_flags
 import scipy
 import imageio
+import tqdm 
 
 from jaxrl_m.agents import pretrain_agents
 from jaxrl_m.data.bc_dataset import glob_to_path_list
@@ -21,7 +22,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("checkpoint_path", None, "Path to the checkpoint to load.", required=True)
 flags.DEFINE_string("target_dataset_path", None, "Path to the target dataset.", required=True)
 flags.DEFINE_string("prior_dataset_path", None, "Path to the prior dataset.", required=True)
-flags.DEFINE_string("prior_dataset_flow_dtype", "float32", "Data type of the flow field.")
+flags.DEFINE_string("prior_dataset_flow_dtype", "float16", "Data type of the flow field.")
 flags.DEFINE_float("threshold", 0.1, "Threshold for retrieval.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
 flags.DEFINE_string("prefix", "", "Prefix for the output file.")
@@ -53,11 +54,15 @@ def main(_):
     target_paths = [[os.path.join(path, "train/out.tfrecord") for path in sub_list] for sub_list in target_paths]
     prior_paths  = [sorted([os.path.join(path, "train/out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
 
+    print(target_paths)
+    print(prior_paths)
+
     target_data = RetrievalDataset(
         target_paths,
         batch_size=FLAGS.config.batch_size,
         act_pred_horizon=FLAGS.act_pred_horizon,
-        prechunk=False,
+        prechunk=True,
+        flow_dtype=FLAGS.prior_dataset_flow_dtype
     )
     target_data_iter = target_data.iterator()
     target_batch = next(target_data_iter)
@@ -105,6 +110,7 @@ def main(_):
 
     prior_data_iter  = prior_data.iterator()
     sim_scores = []
+    pbar = tqdm.tqdm(total=None)
     while True:
         try:
             prior_batch = next(prior_data_iter)
@@ -115,6 +121,7 @@ def main(_):
             sim_scores.append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings, prior_embeddings), axis=0))
         except StopIteration:
             break
+        pbar.update(1)
     sim_scores = jnp.concatenate(sim_scores, axis=0)
 
     logging.info(f"prior size: {sim_scores.shape[0]}")
@@ -138,24 +145,41 @@ def main(_):
     )
     prior_data_iter  = prior_data.iterator()
 
-    cnt = 0
-    current_idx = 0
-    while True:
-        try:
-            prior_batch = next(prior_data_iter)
-            current_mask = mask[current_idx:current_idx+len(prior_batch['actions'])]
-            current_idx += len(prior_batch['actions'])
-        except StopIteration:
-            break
+    outpath = os.path.join(FLAGS.output_dir, f"{FLAGS.prefix}_flow_retrieved_{FLAGS.threshold}_{'prechunk' if FLAGS.act_pred_horizon != 1 else ''}", 'train/out.tfrecord')
+    tf.io.gfile.makedirs(os.path.dirname(outpath))
+    pbar = tqdm.tqdm(total=None)
+    with tf.io.TFRecordWriter(outpath) as writer:
+        current_idx = 0
 
-        if np.sum(current_mask) != 0:
-            for idx in np.where(current_mask)[0]:
-                imageio.imwrite(f"vis/{cnt}.png",
-                                np.concatenate((
-                                    prior_batch['observations']['image'][idx],
-                                    prior_batch['next_observations']['image'][idx],
-                                ), axis=1))
-                cnt += 1
+        while True:
+            try:
+                prior_batch = next(prior_data_iter)
+                if current_idx == 0:
+                    logging.info(f"Shape of actions: {prior_batch['actions'].shape}")
+                    logging.info(f"First three actions of the first batch: {prior_batch['actions'][:3]}")
+                current_mask = mask[current_idx:current_idx+len(prior_batch['actions'])]
+                current_idx += len(prior_batch['actions'])
+            except StopIteration:
+                break
+
+            if np.sum(current_mask) != 0:
+                example = tf.train.Example(
+                    features=tf.train.Features(
+                        feature={
+                            "observations/images0": tensor_feature(
+                                prior_batch["observations"]["image"][current_mask]
+                            ),
+                            "actions": tensor_feature(
+                                prior_batch["actions"][current_mask]
+                            ),
+                            "image_flows": tensor_feature(
+                                prior_batch["image_flows"][current_mask]
+                            ),
+                        }
+                    )
+                )
+                writer.write(example.SerializeToString())
+            pbar.update(1)
 
     
 if __name__ == "__main__":

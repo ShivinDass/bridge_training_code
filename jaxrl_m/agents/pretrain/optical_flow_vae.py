@@ -6,7 +6,7 @@ import flax
 import flax.linen as nn
 import optax
 from absl import logging
-from clu import parameter_overview
+# from clu import parameter_overview
 
 from flax.core import FrozenDict
 from jaxrl_m.common.typing import Batch
@@ -189,7 +189,7 @@ class OpticalFlowVAEAgent(flax.struct.PyTreeNode):
         rng, init_rng = jax.random.split(rng)
         # params = model_def.init(init_rng, encoder=[observations["image_flows"]], decoder=[jnp.zeros((1, latent_kwargs["output_dim"]))])["params"]
         variables = model_def.init(init_rng, encoder=[observations["image_flows"]], decoder=[jnp.zeros((1, latent_kwargs["output_dim"]))])
-        logging.info(parameter_overview.get_parameter_overview(variables))
+        # logging.info(parameter_overview.get_parameter_overview(variables))
         params = variables["params"]
 
         rng, create_rng = jax.random.split(rng)
