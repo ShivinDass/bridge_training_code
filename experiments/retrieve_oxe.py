@@ -18,7 +18,6 @@ flags.DEFINE_string("prior_dataset_path", None, "Path to the prior dataset.", re
 flags.DEFINE_float("threshold", 0.1, "Threshold for retrieval.")
 flags.DEFINE_integer("batch_size", 128, "Batch size.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
-flags.DEFINE_bool("prechunk", False, "Whether the dataset is prechunked.")
 
 def print_nested_dict(d, indent=0):
     for k, v in d.items():
@@ -53,6 +52,7 @@ def convert_batch_to_feature(batch, i, parent_key=None):
             raise ValueError(f"Unsupported type {type(v)}")
     return features
 
+# RETRIEVAL_METHODS = ['language'] 
 RETRIEVAL_METHODS = ['br', 'flow', 'action']
 
 def get_embedding_from_batch(batch, method):
@@ -62,6 +62,8 @@ def get_embedding_from_batch(batch, method):
         return batch['flow_embedding']
     elif method == 'action':
         return batch['action'].reshape(batch['action'].shape[0], -1)
+    elif method == 'language':
+        return np.zeros((batch['action'].shape[0], 2))
     else:
         raise ValueError(f"Invalid retrieval method: {method}")
 
@@ -73,6 +75,7 @@ def main(_):
     # load datasets
     target_paths = [[FLAGS.target_dataset_path]]
     prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path + "/oxe_magic_soup_s?_h8_prechunk",  prefix="")]
+    # prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path,  prefix="")]
 
     target_paths = [[os.path.join(path, "train", "out.tfrecord") for path in sub_list] for sub_list in target_paths]
     prior_paths  = [sorted([os.path.join(path, "out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
@@ -91,7 +94,7 @@ def main(_):
     target_data = CustomRetrievalDataset(
         target_paths,
         batch_size=FLAGS.batch_size,
-        load_keys=['br_embedding', 'flow_embedding', 'action'],
+        load_keys=['br_embedding', 'flow_embedding', 'action', 'task/language_instruction'],
         decode_imgs=False
     )
     target_data_iter = target_data.iterator()
@@ -117,7 +120,7 @@ def main(_):
     prior_data = CustomRetrievalDataset(
         prior_paths,
         batch_size=FLAGS.batch_size,
-        load_keys=['br_embedding', 'flow_embedding', 'action'],
+        load_keys=['br_embedding', 'flow_embedding', 'action', 'task/language_instruction', 'index'],
         decode_imgs=False
     )
     prior_data_iter  = prior_data.iterator()
@@ -134,20 +137,44 @@ def main(_):
         #     logging.info(f"First three actions of the first batch: {prior_batch['action'][:3, 0]}")
         
         for method in RETRIEVAL_METHODS:
-            prior_embeddings = get_embedding_from_batch(prior_batch, method)
-            sim_scores[method].append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings[method], prior_embeddings), axis=0))
-    
+            if method == 'language':
+                prior_language = prior_batch['task/language_instruction']
+                required_langauge = ["turn on the_stove",
+                                     "put the moka pot on the stove",]
+                                    #  "turn on the stove and put the frying pan on it"]
+                
+                sim_score = []
+                for lang in prior_language:
+                    lang = lang.decode('utf-8')
+                    if lang in required_langauge:
+                        sim_score.append(1)
+                    else:
+                        sim_score.append(0)
+                
+                sim_score = np.array(sim_score)
+                sim_scores[method].append(sim_score)
+            else:
+                prior_embeddings = get_embedding_from_batch(prior_batch, method)
+                sim_scores[method].append(-jnp.min(scipy.spatial.distance.cdist(target_embeddings[method], prior_embeddings), axis=0))
+
     for method in RETRIEVAL_METHODS:
         sim_scores[method] = jnp.concatenate(sim_scores[method], axis=0)
         logging.info(f"prior size {method}: {sim_scores[method].shape[0]}")
     logging.info("Finish computing similarity scores.")
+
+    if len(RETRIEVAL_METHODS) == 1 and RETRIEVAL_METHODS[0] == 'language':
+        FLAGS.threshold = np.sum(sim_scores['language'])
+        print(FLAGS.threshold)
 
     # find retrieved data
     masks = {}
     for method in RETRIEVAL_METHODS:
         retrieval_distances = -sim_scores[method]
         sorted_idx = np.argsort(retrieval_distances)
-        threshold_idx = sorted_idx[:int(FLAGS.threshold * len(sorted_idx))]
+        if FLAGS.threshold > 1:
+            threshold_idx = sorted_idx[:int(FLAGS.threshold)]
+        else:
+            threshold_idx = sorted_idx[:int(FLAGS.threshold * len(sorted_idx))]
         mask = np.zeros_like(retrieval_distances, dtype=np.bool_)
         mask[threshold_idx] = True
 
@@ -169,7 +196,7 @@ def main(_):
     prior_data_iter  = prior_data.iterator()
 
     target_dataset_name = os.path.basename(FLAGS.target_dataset_path)
-    outpath_base = os.path.join(FLAGS.output_dir, f"{target_dataset_name}_th{FLAGS.threshold}")
+    outpath_base = os.path.join(FLAGS.output_dir, target_dataset_name, f"{target_dataset_name}_th{FLAGS.threshold}")
     writers = {}
     for method in RETRIEVAL_METHODS:
         outpath = os.path.join(outpath_base, method, "out.tfrecord")

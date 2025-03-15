@@ -6,6 +6,7 @@ import dlimp as dl
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import json
 
 from octo.data.oxe import make_oxe_dataset_kwargs_and_weights
 # from octo.data.dataset import make_dataset_from_rlds
@@ -18,7 +19,7 @@ from octo.data.oxe.oxe_standardization_transforms import custom_dataset_transfor
 default_config = {
     'name': None, 
     'data_dir': None, 
-    'image_obs_keys': {"primary": "image", "wrist": None}, # wrist_image 
+    'image_obs_keys': {"primary": "image", "wrist": "wrist_image"},
     'state_obs_keys': ["state"], 
     'language_key': 'language_instruction', 
     'absolute_action_mask': [False, False, False, False, False, False, True], 
@@ -49,6 +50,7 @@ class EmbedDataset:
         data_dir: str,
         data_mix: Union[str, Sequence[Tuple[str, float]]]=None,
         data_name: str=None,
+        dataset_statistics_path: str=None,
         batch_size: Optional[int] = None,
         traj_transform_threads: Optional[int] = None,
         traj_read_threads: Optional[int] = None,
@@ -73,12 +75,21 @@ class EmbedDataset:
             default_config["data_dir"] = data_dir
             dataset_kwargs_list = [default_config]
 
-        self.dataset_sizes = []
-        all_dataset_statistics = []
-        for dataset_kwargs in dataset_kwargs_list:
-            _, dataset_statistics = custom2_make_dataset_from_rlds(**dataset_kwargs, load_split=load_split)
-            self.dataset_sizes.append(dataset_statistics["num_transitions"])
-            all_dataset_statistics.append(dataset_statistics)
+        if dataset_statistics_path is not None:
+            print('*'*20)
+            print('Loading dataset statistics from', dataset_statistics_path)
+            print('*'*20)
+            with open(dataset_statistics_path, "r") as f:
+                dataset_statistics = json.load(f)
+            all_dataset_statistics = [dataset_statistics]
+            self.dataset_sizes = [dataset_statistics["num_transitions"]]
+        else:
+            self.dataset_sizes = []
+            all_dataset_statistics = []
+            for dataset_kwargs in dataset_kwargs_list:
+                _, dataset_statistics = custom2_make_dataset_from_rlds(**dataset_kwargs, load_split=load_split)
+                self.dataset_sizes.append(dataset_statistics["num_transitions"])
+                all_dataset_statistics.append(dataset_statistics)
 
         # allocate threads based on weights
         threads_per_dataset = allocate_threads(traj_transform_threads, np.array([1.0] * len(dataset_kwargs_list)))

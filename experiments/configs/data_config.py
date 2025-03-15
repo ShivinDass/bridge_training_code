@@ -93,8 +93,8 @@ def get_config(config_string):
         "bridgedata_v2_h8": "bridge_data_v2_h8/?*/?*/?*",
         # NOTE: exclude 0 because the processing is not finished
         "oxe_subset_h8": "flow_retrieval_subset_[1-7]_h8_prechunk",
-        "oxe_broth": "oxe_flow_h4_prechunk",
         "oxe_magic_soup_subset_h8": "oxe_magic_soup_s?_h8_prechunk",
+        "libero_h8_prechunk": "libero_h8_prechunk",
         # NOTE: just for testing
         "pot_microwave_vae_0.01": "pot_with-microwave-vae_bridge_data_v2_h8_0.01_prechunk",
     }

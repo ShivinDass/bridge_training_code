@@ -97,10 +97,10 @@ def create_optical_flow_tfrecord(model, device, inference_size, outpath, iter, t
                     example = tf.train.Example(
                         features=tf.train.Features(
                             feature={
-                                # "observations/images": image_tensor_feature(image_tf),
+                                "observations/images": image_tensor_feature(image_tf),
                                 # "observations/images0": tensor_feature(batch["observations"]["image"]),
                                 # "observations/state": tensor_feature(batch["observations"]["proprio"]),
-                                # "actions": tensor_feature(batch["actions"][i]),
+                                "actions": tensor_feature(batch["actions"][i]),
                                 # "terminals": tensor_feature(batch["terminals"]),
                                 "image_flows": tensor_feature(image_flows[i]),
                             }
@@ -160,7 +160,7 @@ def main(_):
     weights = checkpoint['model'] if 'model' in checkpoint else checkpoint
     model.load_state_dict(weights)
     model.eval()
-    inference_size = [256, 256] # Use larger inference size for better quality
+    inference_size = [480, 480] # Use larger inference size for better quality
 
     train_outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.out_dir_prefix}_h{FLAGS.horizon}_prechunk", "train/out.tfrecord")
     create_optical_flow_tfrecord(model, device, inference_size, train_outpath, train_data_iter, total=train_count)

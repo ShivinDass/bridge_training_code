@@ -228,10 +228,10 @@ def main(_):
                 # print_nested_dict(batch)
                 # exit(0)
 
-                flow_embeddings = compute_flow_embeddings(batch)
-                br_embeddings = compute_br_embeddings(batch)
-                batch['flow_embedding'] = np.asarray(flow_embeddings)
-                batch['br_embedding'] = np.asarray(br_embeddings)
+                # flow_embeddings = compute_flow_embeddings(batch)
+                # br_embeddings = compute_br_embeddings(batch)
+                # batch['flow_embedding'] = np.asarray(flow_embeddings)
+                # batch['br_embedding'] = np.asarray(br_embeddings)
 
                 batch['observation']['image_primary'] = batch['image_primary_encoding']
                 batch['observation']['image_wrist'] = batch['image_wrist_encoding']

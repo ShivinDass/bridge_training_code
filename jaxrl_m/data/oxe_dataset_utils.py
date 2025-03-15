@@ -46,30 +46,6 @@ def normalize_action_and_proprio(
             )
         return traj
 
-    if normalization_type == NormalizationType.BOUNDS:
-        # normalize to [-1, 1]
-        for key, traj_key in keys_to_normalize.items():
-            mask = metadata[key].get(
-                "mask", tf.ones_like(metadata[key]["min"], dtype=tf.bool)
-            )
-            traj = dl.transforms.selective_tree_map(
-                traj,
-                match=lambda k, _: k == traj_key,
-                map_fn=lambda x: tf.where(
-                    mask,
-                    tf.clip_by_value(
-                        2
-                        * (x - metadata[key]["min"])
-                        / (metadata[key]["max"] - metadata[key]["min"] + 1e-8)
-                        - 1,
-                        -1,
-                        1,
-                    ),
-                    x,
-                ),
-            )
-        return traj
-
     raise ValueError(f"Unknown normalization type {normalization_type}")
 
 def custom2_make_dataset_from_rlds(
@@ -221,6 +197,7 @@ def custom2_make_dataset_from_rlds(
             "task": task,
             "action": tf.cast(traj["action"], tf.float32),
             "dataset_name": tf.repeat(name, traj_len),
+            "index": tf.cast(traj["index"], tf.int32),
         }
 
         if absolute_action_mask is not None:

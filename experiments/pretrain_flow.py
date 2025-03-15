@@ -96,8 +96,8 @@ def main(_):
         for sub_list in task_paths
     ]
 
-    train_paths[0].append('/home/shivin/foundation_models/data/baselines/vae_training_data/oxe_magic_soup_s3_h8_prechunk/train/out.tfrecord')
-    val_paths[0].append('/home/shivin/foundation_models/data/baselines/vae_training_data/oxe_magic_soup_s3_h8_prechunk/val/out.tfrecord')
+    print(train_paths)
+    print(val_paths)
 
     train_data = OpticalFlowVAEDataset(
         train_paths,

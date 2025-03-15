@@ -7,11 +7,40 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from jaxrl_m.data.oxe_dataset_utils import custom2_make_dataset_from_rlds, normalize_action_and_proprio
+from jaxrl_m.data.oxe_dataset_utils import custom2_make_dataset_from_rlds
 from octo.data.oxe import make_oxe_dataset_kwargs_and_weights
 from octo.data.utils.data_utils import allocate_threads, tree_map, NormalizationType
 from octo.utils.spec import ModuleSpec
 
+
+def normalize_action_and_proprio(
+    traj: dict, metadata: dict, normalization_type: NormalizationType
+):
+    """Normalizes the action and proprio fields of a trajectory using the given metadata."""
+    # maps keys of `metadata` to corresponding keys in `traj`
+
+    keys_to_normalize = {
+        "action": "actions",
+    }
+    if "proprio" in traj["observations"]:
+        keys_to_normalize["proprio"] = "observations/proprio"
+
+    if normalization_type == NormalizationType.NORMAL:
+        # normalize to mean 0, std 1
+        for key, traj_key in keys_to_normalize.items():
+            mask = metadata[key].get(
+                "mask", tf.ones_like(metadata[key]["mean"], dtype=tf.bool)
+            )
+            traj = dl.transforms.selective_tree_map(
+                traj,
+                match=lambda k, _: k == traj_key,
+                map_fn=lambda x: tf.where(
+                    mask, (x - metadata[key]["mean"]) / (metadata[key]["std"] + 1e-8), x
+                ),
+            )
+        return traj
+
+    raise ValueError(f"Unknown normalization type {normalization_type}")
 
 def custom_make_dataset_from_rlds(
     name: str,
@@ -278,7 +307,7 @@ class OXEGMFlowDataset:
         dataset_sizes = []
         all_dataset_statistics = []
         for dataset_kwargs in dataset_kwargs_list:
-            _, dataset_statistics = custom2_make_dataset_from_rlds(**dataset_kwargs, train=train)
+            _, dataset_statistics = custom2_make_dataset_from_rlds(**dataset_kwargs)
             dataset_sizes.append(dataset_statistics["num_transitions"])
             all_dataset_statistics.append(dataset_statistics)
 

@@ -53,6 +53,7 @@ flags.DEFINE_string("data_dir", None, "Path to the data directory.", required=Tr
 flags.DEFINE_integer("batch_size", 128, "Batch size.")
 flags.DEFINE_integer("future_image_horizon", None, "Horizon to compute the optical flow", required=True)
 flags.DEFINE_string("out_dir", None, "Path to the output directory.", required=True)
+flags.DEFINE_string("data_stats_path", None, "Path to the dataset statistics.")
 
 
 def tensor_feature(value):
@@ -169,7 +170,8 @@ def load_flow_embed_model(target_batch):
         **config.agent_kwargs,
     )
     flow_embed_model = checkpoints.restore_checkpoint(
-        '/home/shivin/foundation_models/experiments/baselines_oxe/flow_vae_rn18_oxe_magic_soup_subset_h8_20250102_140803_1', 
+        # '/home/shivin/foundation_models/experiments/baselines_oxe/flow_vae_rn18_oxe_magic_soup_subset_h8_20250102_140803_1', 
+        '/home/shivin/foundation_models/experiments/baselines_oxe/flow_vae_rn18_libero_h8_prechunk_20250120_103634_1',
         target=flow_embed_model)
 
 def load_br_embed_model(target_batch):
@@ -192,7 +194,8 @@ def load_br_embed_model(target_batch):
         **config.agent_kwargs,
     )
     br_embed_model = checkpoints.restore_checkpoint(
-        '/home/shivin/foundation_models/experiments/baselines_oxe/br_vae_rn18_oxe_magic_soup_subset_h8_20250101_233131_1',
+        # '/home/shivin/foundation_models/experiments/baselines_oxe/br_vae_rn18_oxe_magic_soup_subset_h8_20250101_233131_1',
+        '/home/shivin/foundation_models/experiments/baselines_oxe/br_vae_rn18_libero_h8_prechunk_20250120_190454_1',
         target=br_embed_model)
 
 def compute_embeddings(data_iter, outpath):
@@ -204,14 +207,14 @@ def compute_embeddings(data_iter, outpath):
         # for i in range(10):
             try:
                 batch = next(data_iter)
-                print_nested_dict(batch)
+                # print_nested_dict(batch)
                 # exit(0)
 
-                flow_embeddings = compute_flow_embeddings(batch)
-                br_embeddings = compute_br_embeddings(batch)
+                # flow_embeddings = compute_flow_embeddings(batch)
+                # br_embeddings = compute_br_embeddings(batch)
                 # exit(0)
-                batch['flow_embedding'] = np.asarray(flow_embeddings)
-                batch['br_embedding'] = np.asarray(br_embeddings)
+                # batch['flow_embedding'] = np.asarray(flow_embeddings)
+                # batch['br_embedding'] = np.asarray(br_embeddings)
 
                 batch['observation']['image_primary'] = batch['image_primary_encoding']
                 batch['observation']['image_wrist'] = batch['image_wrist_encoding']
@@ -239,38 +242,41 @@ def main(_):
     train_data = EmbedDataset(
         data_name=FLAGS.data_name,
         data_dir=FLAGS.data_dir,
+        dataset_statistics_path=FLAGS.data_stats_path,
         batch_size=FLAGS.batch_size,
         traj_transform_threads=24,
         traj_read_threads=24,
         frame_transforms_threads=8,
-        act_pred_horizon=4,
+        act_pred_horizon=8,
         future_image_horizon=FLAGS.future_image_horizon,
         window_size=WINDOW_SIZE,
-        load_split='train',
+        # load_split='train', 
+        load_split='all',
     )
     train_iter = train_data.iterator()
 
     # load datasets
-    val_data = EmbedDataset(
-        data_name=FLAGS.data_name,
-        data_dir=FLAGS.data_dir,
-        batch_size=FLAGS.batch_size,
-        traj_transform_threads=24,
-        traj_read_threads=24,
-        frame_transforms_threads=8,
-        act_pred_horizon=4,
-        future_image_horizon=FLAGS.future_image_horizon,
-        window_size=WINDOW_SIZE,
-        load_split='val',
-    )
-    val_iter = val_data.iterator()
+    # val_data = EmbedDataset(
+    #     data_name=FLAGS.data_name,
+    #     data_dir=FLAGS.data_dir,
+    #     dataset_statistics_path=FLAGS.data_stats_path,
+    #     batch_size=FLAGS.batch_size,
+    #     traj_transform_threads=24,
+    #     traj_read_threads=24,
+    #     frame_transforms_threads=8,
+    #     act_pred_horizon=8,
+    #     future_image_horizon=FLAGS.future_image_horizon,
+    #     window_size=WINDOW_SIZE,
+    #     load_split='val',
+    # )
+    # val_iter = val_data.iterator()
 
     # load models
-    load_gm_flow_model()
-    outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_name}_h{FLAGS.future_image_horizon}_prechunk", "train", "out.tfrecord")
+    # load_gm_flow_model()
+    outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_name}_chunk{FLAGS.future_image_horizon}_prechunk", "out.tfrecord")
     compute_embeddings(train_iter, outpath)
-    outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_name}_h{FLAGS.future_image_horizon}_prechunk", "val", "out.tfrecord")
-    compute_embeddings(val_iter, outpath)
+    # outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_name}_chunk{FLAGS.future_image_horizon}_prechunk", "val", "out.tfrecord")
+    # compute_embeddings(val_iter, outpath)
 
 if __name__ == "__main__":
     app.run(main)

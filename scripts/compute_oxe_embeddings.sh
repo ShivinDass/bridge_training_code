@@ -10,6 +10,7 @@ declare -a MIX_NAMES=(
 "oxe_magic_soup_s2"
 "oxe_magic_soup_s3"
 "oxe_magic_soup_s4" 
+"ut_datasets"
 )
 
 MIX_NAME=${MIX_NAMES[$1]}
