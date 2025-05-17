@@ -17,7 +17,7 @@ MIX_NAME=${MIX_NAMES[$1]}
 
 echo "Computing optical flow for $MIX_NAME"
 
-python experiments/compute_oxe_optical_flow.py \
+python experiments/compute_optical_flow.py \
 --data_mix $MIX_NAME \
 --data_dir $DATA_DIR \
 --batch_size 256 \

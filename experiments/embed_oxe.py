@@ -1,10 +1,12 @@
 import os
 from functools import partial
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
+tf.config.set_visible_devices([], "GPU")
+
+import jax
+import jax.numpy as jnp
 import tqdm
 from absl import app, flags, logging
 from flax.training import checkpoints
@@ -29,6 +31,7 @@ try:
 except ImportError:
     pass
 
+dino_model = None
 gm_flow_model = None
 flow_embed_model = None
 br_embed_model = None
@@ -133,6 +136,17 @@ def compute_br_embeddings(batch):
     embeddings = br_embed_model.compute_embeddings(new_batch)
     return embeddings
 
+def compute_dino_embeddings(batch):
+    # preprocess images
+    images = batch['observation']['image_primary'][:, 0] # (B, H, W, C)
+    images = torch.from_numpy(images.copy()).permute(0, 3, 1, 2).to(DEVICE).float() # (B, C, H, W)
+
+    with torch.no_grad():
+        features = dino_model.preprocess(images)
+        features = dino_model.encode(images)
+
+    return features.cpu().numpy()
+
 def load_gm_flow_model():
     # load GMFLow model
     global gm_flow_model
@@ -148,6 +162,11 @@ def load_gm_flow_model():
     weights = checkpoint['model'] if 'model' in checkpoint else checkpoint
     gm_flow_model.load_state_dict(weights)
     gm_flow_model.eval()
+
+def load_dino_model():
+    from jaxrl_m.utils.strap_utils import DinoV2
+    global dino_model
+    dino_model = DinoV2(device=DEVICE)
 
 def load_flow_embed_model(target_batch):
     # load flow_embed model
@@ -197,7 +216,6 @@ def load_br_embed_model(target_batch):
 
 def main(_):
     # prevent tensorflow from using GPUs
-    tf.config.set_visible_devices([], "GPU")
 
     # load datasets
     train_data = EmbedDataset(
@@ -215,10 +233,12 @@ def main(_):
     data_iter = train_data.iterator()
 
     # load models
-    load_gm_flow_model()
-    outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_mix}_h{FLAGS.future_image_horizon}_prechunk", "out.tfrecord")
+    # load_gm_flow_model()
+    load_dino_model()
+    outpath = os.path.join(FLAGS.out_dir, f"{FLAGS.data_mix}_prechunk", "out.tfrecord")
     
     tf.io.gfile.makedirs(os.path.dirname(outpath))
+    unique_idx = set()
     with tf.io.TFRecordWriter(outpath) as writer:
     # if True:
         pbar = tqdm.tqdm(total=None)
@@ -228,10 +248,13 @@ def main(_):
                 # print_nested_dict(batch)
                 # exit(0)
 
-                # flow_embeddings = compute_flow_embeddings(batch)
-                # br_embeddings = compute_br_embeddings(batch)
-                # batch['flow_embedding'] = np.asarray(flow_embeddings)
-                # batch['br_embedding'] = np.asarray(br_embeddings)
+                flow_embeddings = compute_flow_embeddings(batch)
+                br_embeddings = compute_br_embeddings(batch)
+                batch['flow_embedding'] = np.asarray(flow_embeddings)
+                batch['br_embedding'] = np.asarray(br_embeddings)
+
+                dino_embeddings = compute_dino_embeddings(batch)
+                batch['dino_embeddings'] = np.asarray(dino_embeddings)
 
                 batch['observation']['image_primary'] = batch['image_primary_encoding']
                 batch['observation']['image_wrist'] = batch['image_wrist_encoding']
@@ -240,6 +263,8 @@ def main(_):
                 del batch['future_image']
                 
                 for batch_idx in range(batch['action'].shape[0]):
+                    unique_idx.add(batch['index'][batch_idx])
+
                     example = tf.train.Example(
                         features=tf.train.Features(
                             feature=convert_batch_to_feature(batch, batch_idx)
@@ -250,6 +275,8 @@ def main(_):
             except StopIteration:
                 break
             pbar.update(1)
+    print(unique_idx)
+    print("Unique indices: ", len(unique_idx))
 
 if __name__ == "__main__":
     app.run(main)

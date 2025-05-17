@@ -1,9 +1,8 @@
-DATA_DIR=/home/shivin/tensorflow_datasets
-DATA_NAME=libero90_horizon30
-DATA_STATS_PATH=/home/shivin/tensorflow_datasets/libero90/0.1.0/dataset_statistics_9abb65a9c7829f52c81741919ae39f05baf55b6a5aab3f0ddd897947d3b283e5.json
-# DATA_NAME=oxe_magic_soup_s1
+DATA_DIR=/mnt/hdd1/tensorflow_datasets
+DATA_NAME=libero90_horizon15
+DATA_STATS_PATH=/mnt/hdd1/tensorflow_datasets/libero90/0.1.0/dataset_statistics_9abb65a9c7829f52c81741919ae39f05baf55b6a5aab3f0ddd897947d3b283e5.json
 
-OUT_DIR=/mnt/hdd2/baselines/prior_data
+OUT_DIR=/mnt/hdd2/baselines/prior_data/
 echo "Computing embeddings for $DATA_NAME"
 python experiments/embed_target.py \
 --data_name $DATA_NAME \
@@ -11,10 +10,11 @@ python experiments/embed_target.py \
 --batch_size 256 \
 --data_stats_path $DATA_STATS_PATH \
 --future_image_horizon 8 \
+--act_pred_horizon 8 \
 --out_dir $OUT_DIR
 
-# DATA_DIR=/home/shivin/tensorflow_datasets/libero_val
-# OUT_DIR=/mnt/hdd2/baselines/target_data_chunk8
+# DATA_DIR=/home/shivin/tensorflow_datasets/libero_val_selected_demos_first5
+# OUT_DIR=/mnt/hdd2/baselines/with_subopt_embeddings_target_data_first5_chunk8
 # DATA_STATS_PATH=/home/shivin/tensorflow_datasets/libero90/0.1.0/dataset_statistics_9abb65a9c7829f52c81741919ae39f05baf55b6a5aab3f0ddd897947d3b283e5.json
 
 # declare -a DATASET_NAMES=(
@@ -40,5 +40,6 @@ python experiments/embed_target.py \
 #         --data_stats_path $DATA_STATS_PATH \
 #         --batch_size 256 \
 #         --future_image_horizon 8 \
+#         --act_pred_horizon 8 \
 #         --out_dir $OUT_DIR
 # done

@@ -19,7 +19,7 @@ flags.DEFINE_integer("batch_size", 128, "Batch size.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
 flags.DEFINE_bool("random", False, "", required=False)
 flags.DEFINE_float("topk", 0.1, "Top k percentage of data to use.")
-flags.DEFINE_float("iter_dm", -1, "Number of dm iterations to use.")
+flags.DEFINE_integer("iter_dm", -1, "Number of dm iterations to use.")
 
 def print_nested_dict(d, indent=0):
     for k, v in d.items():
@@ -68,13 +68,18 @@ def convert_batch_to_feature(batch, i, parent_key=None):
 #     return mask
 
 def load_dm_mask(dm_path, topk=0.1, iter_dm=-1):
+    '''
+    dm_path: path to the datamodels folder
+    topk: top k percentage of data to use
+    iter_dm: number of dm iterations to use. default is -1, which means all iterations
+    '''
     iter_num = len(os.listdir(dm_path)) if iter_dm == -1 else int(iter_dm)
     all_dms = []
     count_dms = 0
 
     # n_trajs = 4500 # traj
-    n_trajs = 24489 # w30
-    # n_trajs = 46704 # w15
+    # n_trajs = 24489 # w30
+    n_trajs = 46705 # w15 
     for iter_id in range(iter_num):
         iter_path = os.path.join(dm_path, f'iter_{iter_id}')
         
@@ -102,13 +107,22 @@ def load_dm_mask(dm_path, topk=0.1, iter_dm=-1):
     # selected_dm = (avg_dm <= min_th) | (avg_dm >= max_th)
     # print(min_th, max_th, np.sum(selected_dm))
 
+    # Option 3
+    # import json
+    # with open(os.path.join(dm_path, f'iter_{int(iter_dm-1)}/include_index.json'), 'r') as f:
+    #     include_index = json.load(f)
+    # selected_dm = np.zeros_like(avg_dm, dtype=bool)
+    # print(len(include_index['shards']))
+    # for shard in include_index['shards']:
+    #         shard_idx = int(shard['raw_data']['basename'].split('/')[0].split('_')[-1])
+    #         selected_dm[shard_idx] = True
+
     return selected_dm, count_dms
 
 def main(_):
     # prevent tensorflow from using GPUs
     tf.config.set_visible_devices([], "GPU")
 
-    # prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path + "/oxe_magic_soup_s?_h8_prechunk",  prefix="")]
     prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path,  prefix="")]
     prior_paths  = [sorted([os.path.join(path, "out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
     # prior_paths = [[prior_paths[0][0]]]
@@ -117,15 +131,6 @@ def main(_):
 
     dm_mask, iter_dm = load_dm_mask(FLAGS.dm_path, topk=FLAGS.topk, iter_dm=FLAGS.iter_dm)
     
-    # print(FLAGS.random)
-    # if FLAGS.random == True:
-    #     total = np.sum(dm_mask)
-    #     random_indices = np.random.permutation(4500)[:total]
-    #     dm_mask = np.zeros(4500, dtype=bool)
-    #     dm_mask[random_indices] = True
-    # print(np.sum(dm_mask))
-    # print(dm_mask.shape)
-
     target_dataset_name = os.path.basename(FLAGS.dm_path)
     print(target_dataset_name)
 

@@ -1,3 +1,0 @@
-1. Create a tf dataset using rlds_dataset_builder and rlds_dataset_mod
-2. Add embeddings to the tf dataset: ./compute_target_embeddings.sh
-3. Retrieve the data: ./retreive_oxe.sh

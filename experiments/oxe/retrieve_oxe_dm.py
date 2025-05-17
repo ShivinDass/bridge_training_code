@@ -13,10 +13,11 @@ from jaxrl_m.data.custom_retrieval_dataset import CustomRetrievalDataset
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("target_dataset_path", None, "Path to the target dataset.", required=True)
+flags.DEFINE_string("dm_path", None, "Path to the target dataset.", required=True)
 flags.DEFINE_string("prior_dataset_path", None, "Path to the prior dataset.", required=True)
 flags.DEFINE_integer("batch_size", 128, "Batch size.")
 flags.DEFINE_string("output_dir", None, "Path to the output directory.", required=True)
+flags.DEFINE_float("topk", 0.1, "Top k percentage of data to use.")
 
 def print_nested_dict(d, indent=0):
     for k, v in d.items():
@@ -51,29 +52,67 @@ def convert_batch_to_feature(batch, i, parent_key=None):
             raise ValueError(f"Unsupported type {type(v)}")
     return features
 
+def load_dm_mask(dm_path, topk=0.1):
+    '''
+    dm_path: path to the datamodels folder
+    topk: top k percentage of data to use
+    '''
+    avg_dm = np.load(dm_path)[1000000:]
+    no_nan_mask = np.logical_not(np.isnan(avg_dm))
+
+    non_nan_avg_dm = avg_dm[no_nan_mask]
+    print(non_nan_avg_dm.shape)
+    threshold = np.sort(non_nan_avg_dm, axis=0)[int(topk*len(non_nan_avg_dm))]
+
+    selected_dm = avg_dm <= threshold
+    print(threshold, np.sum(selected_dm))
+
+    # exit(0)
+
+    # print(np.sum(avg_dm!=0))
+    # assert n_trajs == np.sum(avg_dm!=0)
+
+    # Option 1
+    # threshold = np.sort(avg_dm, axis=0)[int(topk*n_trajs)]
+    # selected_dm = avg_dm <= threshold
+    # print(threshold, np.sum(selected_dm))
+
+    # Option 2
+    # min_th, max_th = np.percentile(avg_dm, [100*topk/2, 100*(1-topk/2)])
+    # selected_dm = (avg_dm <= min_th) | (avg_dm >= max_th)
+    # print(min_th, max_th, np.sum(selected_dm))
+
+    return selected_dm
+
 def main(_):
     # prevent tensorflow from using GPUs
     tf.config.set_visible_devices([], "GPU")
 
-    assert os.path.exists(FLAGS.target_dataset_path), f"Path {FLAGS.target_dataset_path} does not exist."
     # load datasets
-    target_paths = [[FLAGS.target_dataset_path]]
-    # prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path + "/oxe_magic_soup_s?_h8_prechunk",  prefix="")]
-    prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path + "/ut_datasets_h8_prechunk",  prefix="")]
+    prior_paths = []
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s1_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s2_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s3_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s4_prechunk"])
 
-    target_paths = [[os.path.join(path, "train", "out.tfrecord") for path in sub_list] for sub_list in target_paths]
     prior_paths  = [sorted([os.path.join(path, "out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
     # prior_paths = [[prior_paths[0][0]]]
     # prior_paths = [[target_paths[0][0]]]
-    print("Target paths:", target_paths)
     print("Prior paths:", prior_paths)
 
-    dataset = tf.data.TFRecordDataset(target_paths[0], num_parallel_reads=tf.data.AUTOTUNE)
+    dm_mask = load_dm_mask(FLAGS.dm_path, topk=FLAGS.topk)
+
+    target_dataset_name = os.path.basename(FLAGS.dm_path).split('.')[0]
+    print(target_dataset_name)
+
+    dataset = tf.data.TFRecordDataset(prior_paths[0], num_parallel_reads=tf.data.AUTOTUNE)
     for raw_record in dataset.take(1):
         example = tf.train.Example()
         example.ParseFromString(raw_record.numpy())
         # print(example)
         all_dataset_keys = list(example.features.feature.keys())
+    
+    print("All dataset keys:", all_dataset_keys)
 
     keys = []#all_dataset_keys
     for k in all_dataset_keys:
@@ -88,14 +127,13 @@ def main(_):
         decode_imgs=False
     )
     prior_data_iter  = prior_data.iterator()
-    
-    outpath_base = FLAGS.output_dir
-    outpath = os.path.join(outpath_base, "out.tfrecord")
+
+    outpath = os.path.join(FLAGS.output_dir, target_dataset_name + f'_top{FLAGS.topk}.tfrecord')
+    # outpath = os.path.join(outpath_base, "out.tfrecord")
     tf.io.gfile.makedirs(os.path.dirname(outpath))
     writer = tf.io.TFRecordWriter(outpath)
 
     print("\nWriting retrieved data...")
-    current_idx = 0
     pbar = tqdm.tqdm(total=None)
     while True:
         try:
@@ -108,17 +146,19 @@ def main(_):
         batch_size = len(prior_batch['action'])
 
         for batch_idx in range(batch_size):
-            example = tf.train.Example(
-                features=tf.train.Features(
-                    feature=convert_batch_to_feature(prior_batch, batch_idx)
+            if dm_mask[prior_batch['index'][batch_idx]]==True:
+                # print('yes')
+                example = tf.train.Example(
+                    features=tf.train.Features(
+                        feature=convert_batch_to_feature(prior_batch, batch_idx)
+                    )
                 )
-            )
-            writer.write(example.SerializeToString())
-                    
-        current_idx += batch_size
+                writer.write(example.SerializeToString())
+
         pbar.update(1)
 
     writer.close()
 
+    
 if __name__ == "__main__":
     app.run(main)

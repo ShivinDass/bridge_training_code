@@ -11,13 +11,17 @@ import datetime
 from jaxrl_m.data.custom_retrieval_dataset import CustomRetrievalDataset
 
 ITER=30
-TOP=0.1
+TOP=0.05
 
 TASK = 'book-caddy'
 # TASK = 'bowl-cabinet'
 # TASK='mug-mug'
 # TASK='moka-moka'
-DATASET = 'libero90_horizon30'
+# TASK='cream-butter'
+# TASK='soup-sauce'
+
+# DATASET = 'libero90_horizon30'
+DATASET='libero_w15_with_subopt'
 # DATASET = 'libero90'
 
 relevant_task_map ={
@@ -38,10 +42,19 @@ relevant_task_map ={
         'put the yellow and white mug on the right plate'
     ],
     'moka-moka': [
+        'put the moka pot on the stove',
+        'put the right moka pot on the stove',
     ],
+    "cream-butter" : [
+        'pick up the cream cheese and put it in the tray',
+        'pick up the chocolate pudding and put it in the tray',
+        'pick up the butter and put it in the basket',
+    ],
+    "soup-sauce": [
+    ]
 }
 
-IMAGES_TO_SAVE=1
+IMAGES_TO_SAVE=0
 IMG_SIZE = 128
 
 def load_all_libero90_tasks():
@@ -75,16 +88,22 @@ def visualize_data(task_name, retrieval_method):
 
     if retrieval_method=='dm':
         # dataset_path = '/mnt/hdd2/baselines/prior_data/libero90_horizon30_chunk8_prechunk/out.tfrecord'
-        dataset_path = f'/mnt/hdd2/baselines/retrieved_data_chunk8_dm/{DATASET}/{TASK}_iter{ITER}_top{TOP}.tfrecord'
+        dataset_path = f'/mnt/hdd2/baselines/retrieved_data_chunk8_dm/{DATASET}/{TASK}_weighted_subopt_iter{ITER}_top{TOP}.tfrecord'
         wandb_name = f"{retrieval_method}_{DATASET}_{os.path.basename(dataset_path)[:-9]}"
     else:
-        base_path = '/mnt/hdd2/baselines/retrieved_data_chunk8'
+        base_path = '/mnt/hdd2/baselines/with_subopt_embeddings_retrieved_data_chunk8'
         if TASK=='book-caddy':
-            dataset_path = f'{base_path}/study_scene1_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy_h8_prechunk/study_scene1_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy_h8_prechunk_th0.1/{retrieval_method}/out.tfrecord'
+            dataset_path = f'{base_path}/study_scene1_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy_chunk8_prechunk/study_scene1_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
         elif TASK=='bowl-cabinet':
-            dataset_path = f'{base_path}/kitchen_scene4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it_h8_prechunk/kitchen_scene4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it_h8_prechunk_th0.1/{retrieval_method}/out.tfrecord'
+            dataset_path = f'{base_path}/kitchen_scene4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it_chunk8_prechunk/kitchen_scene4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
         elif TASK=='mug-mug':
-            dataset_path = f'{base_path}/living_room_scene5_put_the_white_mug_on_the_left_plate_and_put_the_yellow_and_white_mug_on_the_right_plate_h8_prechunk/living_room_scene5_put_the_white_mug_on_the_left_plate_and_put_the_yellow_and_white_mug_on_the_right_plate_h8_prechunk_th0.1/{retrieval_method}/out.tfrecord'
+            dataset_path = f'{base_path}/living_room_scene5_put_the_white_mug_on_the_left_plate_and_put_the_yellow_and_white_mug_on_the_right_plate_chunk8_prechunk/living_room_scene5_put_the_white_mug_on_the_left_plate_and_put_the_yellow_and_white_mug_on_the_right_plate_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
+        elif TASK=='moka-moka':
+            dataset_path = f'{base_path}/kitchen_scene8_put_both_moka_pots_on_the_stove_chunk8_prechunk/kitchen_scene8_put_both_moka_pots_on_the_stove_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
+        elif TASK=='cream-butter':
+            dataset_path = f'{base_path}/living_room_scene2_put_both_the_cream_cheese_box_and_the_butter_in_the_basket_chunk8_prechunk/living_room_scene2_put_both_the_cream_cheese_box_and_the_butter_in_the_basket_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
+        elif TASK=='soup-sauce':
+            dataset_path = f'{base_path}/living_room_scene2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket_chunk8_prechunk/living_room_scene2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket_chunk8_prechunk_th{TOP}/{retrieval_method}/out.tfrecord'
         else:
             raise ValueError(f'Unknown task {TASK}')
         wandb_name = f"{retrieval_method}_{DATASET}_{TASK}"
@@ -98,16 +117,18 @@ def visualize_data(task_name, retrieval_method):
     else:
         render_wandb = False
         
-    # dataset_path = '/mnt/hdd2/baselines/prior_data/libero90_h8_prechunk/out.tfrecord'
-    # dataset_path = '/mnt/hdd2/baselines/target_data/kitchen_scene3_turn_on_the_stove_and_put_the_moka_pot_on_it_h8_prechunk/val/out.tfrecord'
+    # dataset_path = '/mnt/hdd2/baselines/prior_data/libero90_horizon15_chunk8_prechunk/out.tfrecord'
+    # dataset_path2 = '/mnt/hdd2/baselines/prior_data/libero90_subopt_horizon15_chunk8_prechunk/out.tfrecord'
+    # dataset_path = '/mnt/hdd2/baselines/target_data/kitchen_scene3_turn_on_the_stove_and_put_the_moka_pot_on_it_chunk8_prechunk/val/out.tfrecord'
     
     ds = CustomRetrievalDataset(
         [[dataset_path]],
-        seed=0,
+        # [[dataset_path], [dataset_path2]],
         train=True,
-        batch_size=256,
-        load_keys=['observation/image_primary', 'observation/image_wrist', 'dataset_name', 'task/language_instruction', 'index', 'action'],
-        decode_imgs=True
+        batch_size=512,
+        load_keys=['observation/image_primary', 'observation/image_wrist', 'dataset_name', 
+                   'task/language_instruction', 'index', 'action', 'is_suboptimal'],
+        decode_imgs=False
     )
     iter = ds.iterator()
 
@@ -116,8 +137,9 @@ def visualize_data(task_name, retrieval_method):
     indexes = set({})
     actions = []
     instruction_to_idx = {}
-    for i, batch in enumerate(iter):
-        if i < IMAGES_TO_SAVE:
+    is_suboptimal = {}
+    for j, batch in enumerate(iter):
+        if j < IMAGES_TO_SAVE:
             image_strip_primary = np.concatenate(batch['observation/image_primary'][:18], axis=1)
             image_strip_wrist = np.concatenate(batch['observation/image_wrist'][:18], axis=1)
 
@@ -146,7 +168,11 @@ def visualize_data(task_name, retrieval_method):
             instruction = instruction.decode()
             if instruction not in language_instructions:
                 language_instructions[instruction] = 0
+                is_suboptimal[instruction] = 0
             language_instructions[instruction] += 1
+
+            is_suboptimal[instruction] += batch['is_suboptimal'][i]
+            assert (not batch['index'][i][0]>46705) or batch['is_suboptimal'][i], "Suboptimal action should be 1 if index is > 0"
 
             if instruction not in instruction_to_idx:
                 instruction_to_idx[instruction] = set({})
@@ -155,9 +181,11 @@ def visualize_data(task_name, retrieval_method):
             indexes.add(batch['index'][i][0])
 
         actions.append(batch['action'])
+        if (j+1) % 500 == 0:
+            print(f"Processed {j+1} batches")
 
     # import pickle
-    # with open('/home/shivin/libero_experiments/instruction_to_idx.pkl', 'wb') as f:
+    # with open('/home/shivin/libero_experiments/instruction_to_idx_w15_with_subopt.pkl', 'wb') as f:
     #     pickle.dump(instruction_to_idx, f)
     
     # create a bar plot of dataset names and their frequencies sorted by frequency
@@ -177,15 +205,19 @@ def visualize_data(task_name, retrieval_method):
     #     plt.savefig('domain_frequencies.png')
     
     total = np.sum(list(language_instructions.values()))
+    print(total)
     language_instructions = {k: v/total for k, v in sorted(language_instructions.items(), key=lambda item: item[1], reverse=True)}
+    
     fig = plt.figure(figsize=(20, 10))
 
     keys = list(language_instructions.keys())
+    is_suboptimal = [is_suboptimal[k]/total for k in keys]
     colors = ['C0']*len(keys)
     for k in keys:
         if k in relevant_task_map[TASK]: 
             colors[keys.index(k)] = 'C1'
     plt.bar(language_instructions.keys(), language_instructions.values(), color=colors)
+    plt.bar(language_instructions.keys(), is_suboptimal, color='red')
     plt.xticks(rotation=45, ha='right', rotation_mode='anchor')
     plt.title(f'Language frequency - {TASK} ({retrieval_method})')
     plt.ylim(0, 0.3)
@@ -203,9 +235,9 @@ def visualize_data(task_name, retrieval_method):
     wandb.finish()
 
 if __name__=='__main__':
-    # dataset_name = 'simpler_carrot_dataset_h8_prechunk_th0.05'
-    # dataset_name = 'kitchen_scene3_turn_on_the_stove_and_put_the_moka_pot_on_it_h8_prechunk_th0.1'
-    # retrieval_methods = ['flow', 'br', 'action']
-    # for retrieval_method in retrieval_methods:
-    #     visualize_data(f'{TASK}_baseline', retrieval_method)
-    visualize_data(task_name=f'{TASK}', retrieval_method="dm")
+    # dataset_name = 'simpler_carrot_dataset_chunk8_prechunk_th0.05'
+    # dataset_name = 'kitchen_scene3_turn_on_the_stove_and_put_the_moka_pot_on_it_chunk8_prechunk_th0.1'
+    retrieval_methods = ['flow', 'br', 'action']
+    for retrieval_method in retrieval_methods:
+        visualize_data(f'{TASK}_baseline', retrieval_method)
+    # visualize_data(task_name=f'{TASK}', retrieval_method="dm")

@@ -74,10 +74,13 @@ def main(_):
     assert os.path.exists(FLAGS.target_dataset_path), f"Path {FLAGS.target_dataset_path} does not exist."
     # load datasets
     target_paths = [[FLAGS.target_dataset_path]]
-    prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path + "/oxe_magic_soup_s?_h8_prechunk",  prefix="")]
-    # prior_paths  = [glob_to_path_list(FLAGS.prior_dataset_path,  prefix="")]
-
-    target_paths = [[os.path.join(path, "train", "out.tfrecord") for path in sub_list] for sub_list in target_paths]
+    prior_paths = []
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s1_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s2_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s3_prechunk"])
+    prior_paths.append([FLAGS.prior_dataset_path + "/oxe_magic_soup_s4_prechunk"])
+    
+    target_paths = [[os.path.join(path, "out.tfrecord") for path in sub_list] for sub_list in target_paths]
     prior_paths  = [sorted([os.path.join(path, "out.tfrecord") for path in sub_list]) for sub_list in prior_paths]
     # prior_paths = [[prior_paths[0][0]]]
     # prior_paths = [[target_paths[0][0]]]
@@ -132,10 +135,7 @@ def main(_):
             prior_batch = next(prior_data_iter)
         except StopIteration:
             break
-        # if len(sim_scores['br']) == 0:
-        #     logging.info(f"Shape of actions: {prior_batch['action'].shape}")
-        #     logging.info(f"First three actions of the first batch: {prior_batch['action'][:3, 0]}")
-        
+
         for method in RETRIEVAL_METHODS:
             if method == 'language':
                 prior_language = prior_batch['task/language_instruction']
@@ -183,7 +183,7 @@ def main(_):
 
     keys = []#all_dataset_keys
     for k in all_dataset_keys:
-        if 'embedding' not in k:
+        if 'embedding' not in k and 'is_suboptimal' not in k:
             keys.append(k)
 
     # store retrieved data
@@ -196,7 +196,7 @@ def main(_):
     prior_data_iter  = prior_data.iterator()
 
     target_dataset_name = os.path.basename(FLAGS.target_dataset_path)
-    outpath_base = os.path.join(FLAGS.output_dir, target_dataset_name, f"{target_dataset_name}_th{FLAGS.threshold}")
+    outpath_base = os.path.join(FLAGS.output_dir, f"{target_dataset_name}_th{FLAGS.threshold}")
     writers = {}
     for method in RETRIEVAL_METHODS:
         outpath = os.path.join(outpath_base, method, "out.tfrecord")

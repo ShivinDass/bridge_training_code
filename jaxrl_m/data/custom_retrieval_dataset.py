@@ -42,8 +42,13 @@ class CustomRetrievalDataset:
         batch_size: int = 256,
         load_keys=[],
         decode_imgs=False,
+        num_parallel_calls=tf.data.AUTOTUNE,
+        num_parallel_reads=tf.data.AUTOTUNE,
         **kwargs,
     ):
+        self.num_parallel_calls = num_parallel_calls
+        self.num_parallel_reads = num_parallel_reads
+        
         if isinstance(data_paths[0], str):
             data_paths = [data_paths]
         self.decode_imgs = decode_imgs
@@ -56,6 +61,13 @@ class CustomRetrievalDataset:
         # construct a dataset for each sub-list of paths
         datasets = []
         for sub_data_paths in data_paths:
+            if 'subopt' in sub_data_paths[0]:
+                print(sub_data_paths)
+                self.PROTO_TYPE_SPEC['is_suboptimal'] = tf.bool
+            else:
+                if 'subopt' in self.PROTO_TYPE_SPEC:
+                    # remove is_suboptimal if it exists
+                    del self.PROTO_TYPE_SPEC['is_suboptimal']
             datasets.append(self._construct_tf_dataset(sub_data_paths))
 
         dataset = datasets[0]
@@ -64,7 +76,7 @@ class CustomRetrievalDataset:
 
         dataset = dataset.batch(
             batch_size,
-            num_parallel_calls=tf.data.AUTOTUNE,
+            num_parallel_calls=self.num_parallel_calls,
             drop_remainder=False,
             deterministic=True,
         )
@@ -80,10 +92,10 @@ class CustomRetrievalDataset:
         # dataset = tf.data.Dataset.from_tensor_slices(paths)
 
         # yields raw serialized examples
-        dataset = tf.data.TFRecordDataset(paths, num_parallel_reads=tf.data.AUTOTUNE)
+        dataset = tf.data.TFRecordDataset(paths, num_parallel_reads=self.num_parallel_reads)
 
         # yields trajectories
-        dataset = dataset.map(self._decode_example, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.map(self._decode_example, num_parallel_calls=self.num_parallel_calls)
 
         return dataset
 
@@ -104,6 +116,14 @@ class CustomRetrievalDataset:
             else:
                 parsed_tensors[key] = tf.io.parse_tensor(parsed_features[key], dtype)
 
+        # add is_suboptimal if missing
+        if 'is_suboptimal' not in parsed_tensors:
+            parsed_tensors['is_suboptimal'] = tf.zeros((1,), dtype=tf.bool)
+        
+        
+        # make sure the shapes are (256,) and not (256, 1)
+        parsed_tensors['is_suboptimal'] = tf.squeeze(parsed_tensors['is_suboptimal'])
+    
         return {
             key: value for key, value in parsed_tensors.items()
         }

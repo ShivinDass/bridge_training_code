@@ -154,6 +154,12 @@ def custom2_make_dataset_from_rlds(
 
         # extracts images, depth images and proprio from the "observation" dict
         traj_len = tf.shape(traj["action"])[0]
+
+        is_suboptimal = tf.zeros((traj_len,1), dtype=tf.bool)
+        if 'is_suboptimal' in traj:
+            is_suboptimal = tf.cast(traj['is_suboptimal'], dtype=tf.bool)
+            print("\n\nyess\n\n")
+
         old_obs = traj["observation"]
         new_obs = {}
         for new, old in image_obs_keys.items():
@@ -197,7 +203,8 @@ def custom2_make_dataset_from_rlds(
             "task": task,
             "action": tf.cast(traj["action"], tf.float32),
             "dataset_name": tf.repeat(name, traj_len),
-            "index": tf.cast(traj["index"], tf.int32),
+            "index": tf.cast(traj["index"], tf.int32), # + 46705,
+            "is_suboptimal": is_suboptimal,
         }
 
         if absolute_action_mask is not None:
@@ -275,6 +282,30 @@ def custom2_make_dataset_from_rlds(
 
     return dataset, dataset_statistics
 
+##### using included trajectories #####
+mask=None
+# included_traj_ids = np.load('/home/shivin/foundation_models/included_trajectories_4_7_OXE13.npy')
+# mask = np.zeros(2000000, dtype=bool)
+# mask[included_traj_ids] = True
+# mask = tf.convert_to_tensor(mask)
+# print("Number of trajectories selected:", np.sum(mask))
+# exit(0)
+
+##### using avg dms #####
+# topk=0.015
+# avg_dm = np.load('/home/shivin/foundation_models/avg_dm_4_14_OXE23.npy')[1000000:]
+# # topk=0.2
+# # avg_dm = np.load('/home/shivin/foundation_models/avg_dm_4_1.npy')[1000000:]
+# no_nan_mask = np.logical_not(np.isnan(avg_dm))
+
+# no_nan_avg_dm = avg_dm[no_nan_mask]
+# print(no_nan_avg_dm.shape)
+# threshold = np.sort(no_nan_avg_dm, axis=0)[int(topk*len(no_nan_avg_dm))]
+
+# mask = avg_dm <= threshold
+# print(threshold, np.sum(mask))
+# mask = tf.convert_to_tensor(mask)
+
 def custom2_apply_trajectory_transforms(
     dataset: dl.DLataset,
     *,
@@ -304,6 +335,14 @@ def custom2_apply_trajectory_transforms(
         traj["future_image"] = tf.gather(traj["observation"]["image_primary"], future_image_indices)
         return traj
     
+    # filter here
+    if mask is not None:
+        dataset = dataset.filter(
+            lambda x: tf.reduce_any(
+                mask[x['index'][0]]==True
+            )
+        )
+
     dataset = dataset.traj_map(traj_transforms.add_pad_mask_dict, num_parallel_calls)
     
     dataset = dataset.traj_map(
